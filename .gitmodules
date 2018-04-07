@@ -1,0 +1,6 @@
+[submodule "amepd"]
+	path = amepd
+	url = https://github.com/rhdunn/amepd
+[submodule "cmudict"]
+	path = cmudict
+	url = https://github.com/cmusphinx/cmudict
