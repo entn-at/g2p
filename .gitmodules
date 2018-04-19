@@ -4,3 +4,6 @@
 [submodule "cmudict"]
 	path = cmudict
 	url = https://github.com/cmusphinx/cmudict
+[submodule "phonetisaurus"]
+	path = phonetisaurus
+	url = https://github.com/AdolfVonKleist/Phonetisaurus
