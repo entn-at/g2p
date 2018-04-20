@@ -1,14 +1,12 @@
 
 import os
-import sys
 import time
+import json
 import argparse
 
 import tensorflow as tf
 
 from read_utils import *
-from nn.hparams import hparams
-from nn.model import G2PModel, create_placeholders
 from nn.encode_utils import *
 
 
@@ -22,6 +20,8 @@ def parse_args():
     arg_parser.add_argument('--hparams', default='', help='Overwrites hparams')
     arg_parser.add_argument('--restore', type=int,
                             help='Step to restore if any')
+    arg_parser.add_argument('--model-type', choices=('ctc', 'attention'),
+                            default='ctc', help='What kind of model to train')
 
     args = arg_parser.parse_args()
     if not os.path.isfile(args.train):
@@ -54,33 +54,53 @@ class AverageWindow:
 
 def main():
     args = parse_args()
+
+    if args.model_type == 'ctc':
+        from nn.hparams_ctc import hparams
+        from nn.model_ctc import G2PModel
+    elif args.model_type == 'attention':
+        from nn.hparams_attention import hparams
+        from nn.model_attention import G2PModel
+
     hparams.parse(args.hparams)
 
     d = read_cmudict(args.train)
     g2i = get_graphemes_map(d)
     p2i = get_phonemes_map(d)
-    traind = encode_dict(d, g2i, p2i)
-    if args.dev:
-        d = read_cmudict(args.dev)
-        devd = encode_dict(d, g2i, p2i)
-    assert(len(g2i) + 1 == hparams.graphemes_num)
-    assert(len(p2i) + 1 == hparams.phonemes_num)
+    with open('%s/g2i.json' % args.model_dir, 'w') as outfp:
+        json.dump(g2i, outfp)
+    with open('%s/p2i.json' % args.model_dir, 'w') as outfp:
+        json.dump(p2i, outfp)
+
+    if args.model_type == 'ctc':
+        traind = encode_dict(d, g2i, p2i)
+        if args.dev:
+            d = read_cmudict(args.dev)
+            devd = encode_dict(d, g2i, p2i)
+        # one reserved for padding/skip symbol
+        assert(len(g2i) + 1 == hparams.graphemes_num)
+        assert(len(p2i) + 1 == hparams.phonemes_num)
+    elif args.model_type == 'attention':
+        traind = encode_dict(d, g2i, p2i, graphemes_longer=False)
+        if args.dev:
+            d = read_cmudict(args.dev)
+            devd = encode_dict(d, g2i, p2i, graphemes_longer=False)
+        # one reserved for padding/stop symbol. one more for start symbol in phonemes
+        assert(len(g2i) + 1 == hparams.graphemes_num)
+        assert(len(p2i) + 2 == hparams.phonemes_num)
+
     print('**Info: training inputs read. There are %d graphemes and %d phonemes' %
           (len(g2i), len(p2i)))
     i2p = {v: k for k, v in p2i.items()}
 
-    inputs, input_lengths, targets = create_placeholders(with_target=True)
-    model = G2PModel(inputs, input_lengths, hparams, is_training=True,
+    model = G2PModel(hparams, is_training=True, with_target=True,
                      reuse=False)
-    model.add_decoder()
-    model.add_loss(targets)
+    model.add_loss()
     model.add_train_and_stats()
-
     if args.dev:
-        dev_model = G2PModel(inputs, input_lengths, hparams, is_training=False,
+        dev_model = G2PModel(hparams, is_training=False, with_target=True,
                              reuse=True)
-        dev_model.add_decoder()
-        dev_model.add_loss(targets)
+        dev_model.add_loss()
     print('**Info: model created')
 
     sess = tf.Session()
@@ -92,26 +112,23 @@ def main():
         model_path ='%s-%d' % (model_prefix, args.restore)
         saver.restore(sess, model_path)
 
-    d_batched = group_batch_pad(traind, len(g2i),
-                                group_size=hparams.group_size,
-                                batch_size=hparams.batch_size)
-    print(len(d_batched))
+    d_batched = group_batch_pad(traind, g2i, p2i, hparams.group_size,
+                                hparams.batch_size, args.model_type)
     if args.dev:
-        ddev_batched = group_batch_pad(devd, len(g2i),
-                                       group_size=hparams.group_size,
-                                       batch_size=hparams.batch_size)
+        ddev_batched = group_batch_pad(devd, g2i, p2i, hparams.group_size,
+                                       hparams.batch_size, args.model_type)
+
     print('**Info: data grouped and batched')
 
     step = 0
     epoch = 0
     accum = AverageWindow()
     while step < hparams.max_steps:
-        for words, input_len, pron in d_batched:
+        for batch in d_batched:
             start_time = time.time()
             step, loss, _, summary = sess.run(
                     [model.global_step, model.loss, model.train_op, model.stats_op],
-                    feed_dict={inputs: words, input_lengths: input_len,
-                               targets: pron})
+                    feed_dict=model.create_feed_dict(batch))
             summary_writer.add_summary(summary, step)
             step_time = time.time() - start_time
             accum.add(loss, step_time)
@@ -128,15 +145,13 @@ def main():
                 stressless_wer = 0.0
                 words_num = 0
                 eval_start = time.time()
-                for words, input_len, pron in ddev_batched:
-                    loss, output = sess.run([dev_model.loss, dev_model.decoded[0]],
-                                            feed_dict={inputs: words,
-                                                       input_lengths: input_len,
-                                                       targets: pron})
+                for dev_batch in ddev_batched:
+                    loss, output = sess.run([dev_model.loss, dev_model.decoded_best],
+                                            feed_dict=dev_model.create_feed_dict(dev_batch))
                     average_loss += loss
 
-                    orig = decode_pron(i2p, pron)
-                    predicted = decode_pron(i2p, output)
+                    orig = decode_pron(i2p, dev_batch[2], is_sparse=args.model_type == 'ctc')
+                    predicted = decode_pron(i2p, output, is_sparse=args.model_type == 'ctc')
 
                     words_num += len(orig)
                     for o, p in zip(orig, predicted):
@@ -158,9 +173,8 @@ def main():
 
         epoch += 1
         if epoch % hparams.reshuffle_every_nth == 0:
-            d_batched = group_batch_pad(traind, len(g2i),
-                                        group_size=hparams.group_size,
-                                        batch_size=hparams.batch_size)
+            d_batched = group_batch_pad(traind, g2i, p2i, hparams.group_size,
+                                        hparams.batch_size, args.model_type)
 
 
 if __name__ == '__main__':

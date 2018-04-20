@@ -4,20 +4,6 @@ import numpy as np
 import collections
 
 
-def read_cmudict(path):
-    d = []
-    with open(path, 'r') as infp:
-        for line in infp:
-            line = line.strip()
-            if line.startswith(';;;'):
-                continue
-            if '#' in line:
-                line = line.split('#')[0].rstrip()
-            parts = line.split()
-            d.append((parts[0], parts[1:]))
-    return d
-
-
 def drop_word_idx(w):
     if '(' in w:
         return w.split('(')[0]
@@ -81,58 +67,27 @@ def encode(l, m):
     return np.array([m[element] for element in l])
 
 
-def pad_arr(arr, stop_symbol, padding=3):
-    return np.pad(arr, (0, padding), 'constant',
-                  constant_values=stop_symbol)
-
-
 def pad_arr_to(arr, stop_symbol, expected_len):
     padding = expected_len - len(arr)
     assert(padding >= 0)
     if padding == 0:
         return arr
-    return pad_arr(arr, stop_symbol, padding=padding)
+    return np.pad(arr, (0, padding), 'constant',
+                  constant_values=stop_symbol)
 
 
-def encode_dict(d, g2i, p2i):
+def encode_dict(d, g2i, p2i, graphemes_longer=True):
     newd = []
     for word, pron in d:
         word = encode(word, g2i)
         pron = encode(pron, p2i)
-        word = pad_arr(word, len(g2i), padding=3)
-        diff = len(word) - len(pron)
-        assert(diff >= 0)
+        if graphemes_longer:
+            word = np.pad(word, (0, 3), 'constant',
+                          constant_values=len(g2i))
+            diff = len(word) - len(pron)
+            assert(diff >= 0)
         newd.append((word, pron))
     return newd
-
-
-def get_training_inputs(path, dev_every_n, mapping=None):
-    d = read_cmudict(path)
-    d = filter_long_pron(d)
-    d = filter_short_words(d)
-    d = filter_noneng(d)
-    d = filter_suffix(d)
-
-    # get grapheme2index and phoneme2index mappings
-    if mapping:
-        g2i, p2i = mapping
-    else:
-        g2i = get_graphemes_map(d)
-        p2i = get_phonemes_map(d)
-
-    # split the dict into train/dev
-    traind = []
-    devd = []
-    for i, pair in enumerate(d):
-        if (i + 1) % dev_every_n == 0:
-            devd.append(pair)
-        else:
-            traind.append(pair)
-
-    traind = encode_dict(traind, g2i, p2i)
-    devd = encode_dict(devd, g2i, p2i)
-
-    return traind, devd, g2i, p2i
 
 
 def _create_sparse_tuple(prons):
@@ -147,19 +102,38 @@ def _create_sparse_tuple(prons):
     return indices, values, shape
 
 
-def _preprocess_batch(batch, grapheme_pad_symbol):
+def _preprocess_ctc_batch(batch, grapheme_pad):
     words = [x[0] for x in batch]
     prons = [x[1] for x in batch]
     seq_lens = [len(x) for x in words]
     max_len = max(seq_lens)
-    words = np.stack([pad_arr_to(x, grapheme_pad_symbol, max_len) for x in words])
+    words = np.stack([pad_arr_to(x, grapheme_pad, max_len) for x in words])
     # as for pronunciations - that's a bit more complicated, those should be prepared
     # as sparse tensors
     prons = _create_sparse_tuple(prons)
     return words, seq_lens, prons
 
 
-def group_batch_pad(d, grapheme_pad, group_size=32, batch_size=32):
+def _preprocess_attention_batch(batch, grapheme_pad, phoneme_start, phoneme_pad):
+    words = [x[0] for x in batch]
+    prons = [x[1] for x in batch]
+    prons = [np.pad(p, (0, 1), 'constant', constant_values=phoneme_pad) for p in prons]
+
+    words_len = [len(x) for x in words]
+    prons_len = [len(x) for x in prons]
+
+    prons = [np.pad(p, (1, 0), 'constant', constant_values=phoneme_start) for p in prons]
+
+    max_word_len = max(words_len)
+    max_pron_len = max(prons_len) + 1
+
+    words = np.stack([pad_arr_to(x, grapheme_pad, max_word_len) for x in words])
+    prons = np.stack([pad_arr_to(x, phoneme_pad, max_pron_len) for x in prons])
+
+    return words, words_len, prons, prons_len
+
+
+def group_batch(d, group_size, batch_size):
     total_group_size = group_size * batch_size
     # shuffle pairs (word - pronunciation)
     shuffle(d)
@@ -171,17 +145,39 @@ def group_batch_pad(d, grapheme_pad, group_size=32, batch_size=32):
     d = [g[i:i+batch_size] for g in d for i in range(0, len(g), batch_size)]
     # shuffle the batches
     shuffle(d)
-    # pad batches so the length is the same within the batch
-    d = [_preprocess_batch(b, grapheme_pad) for b in d]
     return d
 
 
-def decode_pron(i2p, pron):
-    indices, values, shape = pron
-    arr = np.ones(shape) * len(i2p)
-    arr[indices[:, 0], indices[:, 1]] = values
+def group_batch_pad_ctc(d, grapheme_pad, group_size, batch_size):
+    d = group_batch(d, group_size, batch_size)
+    # pad batches so the length is the same within the batch
+    d = [_preprocess_ctc_batch(b, grapheme_pad) for b in d]
+    return d
+
+
+def group_batch_pad_attention(d, grapheme_pad, phoneme_start, phoneme_pad,
+                              group_size, batch_size):
+    d = group_batch(d, group_size, batch_size)
+    d = [_preprocess_attention_batch(b, grapheme_pad, phoneme_start, phoneme_pad) for b in d]
+    return d
+
+
+def group_batch_pad(d, g2i, p2i, group_size, batch_size, pad_type):
+    if pad_type == 'ctc':
+        return group_batch_pad_ctc(d, len(g2i), group_size, batch_size)
+    elif pad_type == 'attention':
+        return group_batch_pad_attention(d, len(g2i), len(p2i), len(p2i) + 1,
+                                         group_size, batch_size)
+
+
+def decode_pron(i2p, pron, is_sparse=True):
+    if is_sparse:
+        indices, values, shape = pron
+        arr = np.ones(shape) * len(i2p)
+        arr[indices[:, 0], indices[:, 1]] = values
+        pron = arr
     decoded = []
-    for encoded in arr:
+    for encoded in pron:
         decoded.append([i2p[x] for x in encoded if x < len(i2p)])
     return decoded
 
