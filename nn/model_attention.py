@@ -109,7 +109,7 @@ class G2PModel:
                 self.logits = tf.no_op()
                 # best beam
                 self.decoded_best = outputs.predicted_ids[:, :, 0]
-            self.alignment = tf.transpose(final_state.alignment_history.stack(), [1, 2, 0])
+                self.alignment = tf.transpose(final_state.alignment_history.stack(), [1, 2, 0])
 
     def add_loss(self):
         assert self.with_target
