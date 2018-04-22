@@ -81,8 +81,8 @@ def main():
             pp = ' '.join(p)
             if oo != pp:
                 wer += 1
-            oo = ' '.join([x.rstrip(string.digits) for x in o])
-            pp = ' '.join([x.rstrip(string.digits) for x in p])
+            oo = ' '.join(drop_stress(o))
+            pp = ' '.join(drop_stress(p))
             if oo != pp:
                 stressless_wer += 1
 
