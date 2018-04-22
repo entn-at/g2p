@@ -9,6 +9,16 @@ from nn.modules import *
 
 class G2PModel:
 
+    def create_attention_cell(depth, memory, seq_len, cell, alignment_history):
+        attention = BahdanauAttention(depth,
+                                      memory,
+                                      memory_sequence_length=seq_len,
+                                      normalize=True)
+        attention_cell = AttentionWrapper(cell,
+                                          attention,
+                                          alignment_history=alignment_history)
+        return attention_cell
+
     def __init__(self, hparams, is_training=False, with_target=True, reuse=False):
         self.with_target = with_target
         self.hparams = hparams
@@ -55,14 +65,10 @@ class G2PModel:
 
             if is_training:
                 batch_size = tf.shape(self.inputs)[0]
-
-                attention = BahdanauAttention(hparams.attention_depth,
-                                              encoder_outputs,
-                                              memory_sequence_length=self.input_lengths,
-                                              normalize=True)
-                attention_cell = AttentionWrapper(decoder_cell,
-                                                  attention,
-                                                  alignment_history=False)
+                attention_cell = create_attention_cell(
+                        hparams.attention_depth, encoder_outputs,
+                        self.input_lengths, decoder_cell,
+                        alignment_history=False)
                 attention_cell = OutputProjectionWrapper(attention_cell, hparams.phonemes_num)
                 targets_shifted = self.targets[:, :-1]
                 targets_emb = tf.nn.embedding_lookup(decoder_embeddings,
@@ -84,8 +90,10 @@ class G2PModel:
                 input_lengths_tile = tf.contrib.seq2seq.tile_batch(self.input_lengths, multiplier=hparams.beam_width)
                 encoder_state = tf.contrib.seq2seq.tile_batch(encoder_state, multiplier=hparams.beam_width)
 
-                attention = BahdanauAttention(hparams.attention_depth, encoder_outputs, memory_sequence_length=input_lengths_tile, normalize=True)
-                attention_cell = AttentionWrapper(decoder_cell, attention, alignment_history=True)
+                attention_cell = create_attention_cell(
+                        hparams.attention_depth, encoder_outputs,
+                        input_lengths_tile, decoder_cell,
+                        alignment_history=True)
                 attention_cell = OutputProjectionWrapper(attention_cell, hparams.phonemes_num)
                 #decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32).clone(cell_state=encoder_state)
                 decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32)
