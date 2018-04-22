@@ -76,16 +76,11 @@ def pad_arr_to(arr, stop_symbol, expected_len):
                   constant_values=stop_symbol)
 
 
-def encode_dict(d, g2i, p2i, graphemes_longer=True):
+def encode_dict(d, g2i, p2i):
     newd = []
     for word, pron in d:
         word = encode(word, g2i)
         pron = encode(pron, p2i)
-        if graphemes_longer:
-            word = np.pad(word, (0, 3), 'constant',
-                          constant_values=len(g2i))
-            diff = len(word) - len(pron)
-            assert(diff >= 0)
         newd.append((word, pron))
     return newd
 
@@ -105,6 +100,10 @@ def _create_sparse_tuple(prons):
 def _preprocess_ctc_batch(batch, grapheme_pad):
     words = [x[0] for x in batch]
     prons = [x[1] for x in batch]
+    # to ensure that grapheme sequence is longer than phoneme seq
+    words = [np.pad(words, (0, 3), 'constant', constant_values=grapheme_pad) for w in words]
+    for w, p in zip(words, prons):
+        assert len(w) >= len(p)
     seq_lens = [len(x) for x in words]
     max_len = max(seq_lens)
     words = np.stack([pad_arr_to(x, grapheme_pad, max_len) for x in words])
@@ -117,6 +116,7 @@ def _preprocess_ctc_batch(batch, grapheme_pad):
 def _preprocess_attention_batch(batch, grapheme_pad, phoneme_start, phoneme_pad):
     words = [x[0] for x in batch]
     prons = [x[1] for x in batch]
+    words = [np.pad(w, (0, 1), 'constant', constant_values=grapheme_pad) for w in words]
     prons = [np.pad(p, (0, 1), 'constant', constant_values=phoneme_pad) for p in prons]
 
     words_len = [len(x) for x in words]
