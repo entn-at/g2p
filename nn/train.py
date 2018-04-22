@@ -72,22 +72,10 @@ def main():
     with open('%s/p2i.json' % args.model_dir, 'w') as outfp:
         json.dump(p2i, outfp)
 
-    if args.model_type == 'ctc':
-        traind = encode_dict(d, g2i, p2i)
-        if args.dev:
-            d = read_cmudict(args.dev)
-            devd = encode_dict(d, g2i, p2i)
-        # one reserved for padding/skip symbol
-        assert(len(g2i) + 1 == hparams.graphemes_num)
-        assert(len(p2i) + 1 == hparams.phonemes_num)
-    elif args.model_type == 'attention':
-        traind = encode_dict(d, g2i, p2i, graphemes_longer=False)
-        if args.dev:
-            d = read_cmudict(args.dev)
-            devd = encode_dict(d, g2i, p2i, graphemes_longer=False)
-        # one reserved for padding/stop symbol. one more for start symbol in phonemes
-        assert(len(g2i) + 1 == hparams.graphemes_num)
-        assert(len(p2i) + 2 == hparams.phonemes_num)
+    traind = encode_dict(d, g2i, p2i)
+    if args.dev:
+        d = read_cmudict(args.dev)
+        devd = encode_dict(d, g2i, p2i)
 
     print('**Info: training inputs read. There are %d graphemes and %d phonemes' %
           (len(g2i), len(p2i)))
@@ -100,11 +88,10 @@ def main():
     if args.dev:
         dev_model = G2PModel(hparams, is_training=False, with_target=True,
                              reuse=True)
-        dev_model.add_loss()
     print('**Info: model created')
 
     sess = tf.Session()
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(max_to_keep=0)
     summary_writer = tf.summary.FileWriter(args.model_dir, sess.graph)
     sess.run(tf.global_variables_initializer())
     model_prefix = os.path.join(args.model_dir, 'g2p')
@@ -140,15 +127,14 @@ def main():
                 saver.save(sess, model_prefix, global_step=step)
 
             if step % hparams.eval_every_nth == 0 and args.dev:
-                average_loss = 0.0
                 wer = 0.0
                 stressless_wer = 0.0
                 words_num = 0
                 eval_start = time.time()
                 for dev_batch in ddev_batched:
-                    loss, output = sess.run([dev_model.loss, dev_model.decoded_best],
-                                            feed_dict=dev_model.create_feed_dict(dev_batch))
-                    average_loss += loss
+                    output = sess.run([dev_model.decoded_best],
+                                      feed_dict=dev_model.create_feed_dict(dev_batch))
+                    output = np.squeeze(output[0])[:, :, 0]
 
                     orig = decode_pron(i2p, dev_batch[2], is_sparse=args.model_type == 'ctc')
                     predicted = decode_pron(i2p, output, is_sparse=args.model_type == 'ctc')
@@ -164,12 +150,11 @@ def main():
                         if oo != pp:
                             stressless_wer += 1
 
-                average_loss /= len(ddev_batched)
                 wer /= float(words_num)
                 stressless_wer /= float(words_num)
                 eval_took = time.time() - eval_start
-                print(' Eval: step %d; loss %f; wer %f; stressless wer %f; eval took %f' %
-                      (step, average_loss, wer, stressless_wer, eval_took))
+                print(' Eval: step %d; wer %f; stressless wer %f; eval took %f' %
+                      (step, wer, stressless_wer, eval_took))
 
         epoch += 1
         if epoch % hparams.reshuffle_every_nth == 0:
