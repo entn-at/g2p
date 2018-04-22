@@ -2,6 +2,7 @@
 import tensorflow as tf
 from tensorflow.contrib.rnn import OutputProjectionWrapper
 from tensorflow.contrib.seq2seq import BahdanauAttention, AttentionWrapper
+from tensorflow.python.layers import core as layers_core
 
 from nn.modules import *
 
@@ -36,7 +37,7 @@ class G2PModel:
 
             forward_cell = rnn_cell(hparams.encoder_lstm_units//2, hparams, is_training)
             backward_cell = rnn_cell(hparams.encoder_lstm_units//2, hparams, is_training)
-            outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+            outputs, encoder_state = tf.nn.bidirectional_dynamic_rnn(
                 forward_cell, backward_cell,
                 outputs, sequence_length=self.input_lengths, dtype=tf.float32,
                 scope='bilstm')
@@ -44,65 +45,73 @@ class G2PModel:
             # Concatentate forward and backwards:
             encoder_outputs = tf.concat(outputs, axis=2)
 
-            decoder_cell = rnn_cell(hparams.decoder_lstm_units, hparams, is_training)
+            decoder_cell = MultiRNNCell([rnn_cell(hparams.decoder_lstm_units, hparams, is_training),
+                                         rnn_cell(hparams.decoder_lstm_units, hparams, is_training)],
+                                         state_is_tuple=True)
             decoder_embeddings = tf.get_variable(name='decoder_embeddings',
                                                  shape=[hparams.phonemes_num,
                                                         hparams.decoder_embedding_dim],
                                                  dtype=tf.float32)
-            batch_size = tf.shape(self.inputs)[0]
-
-            attention = BahdanauAttention(hparams.attention_depth,
-                                          encoder_outputs,
-                                          memory_sequence_length=self.input_lengths)
-            attention_cell = AttentionWrapper(decoder_cell,
-                                              attention,
-                                              alignment_history=True)
-            attention_cell_proj = OutputProjectionWrapper(attention_cell,
-                                                          hparams.phonemes_num)
 
             if is_training:
+                batch_size = tf.shape(self.inputs)[0]
+
+                attention = BahdanauAttention(hparams.attention_depth,
+                                              encoder_outputs,
+                                              memory_sequence_length=self.input_lengths,
+                                              normalize=True)
+                attention_cell = AttentionWrapper(decoder_cell,
+                                                  attention,
+                                                  alignment_history=False)
+                attention_cell = OutputProjectionWrapper(attention_cell, hparams.phonemes_num)
                 targets_shifted = self.targets[:, :-1]
                 targets_emb = tf.nn.embedding_lookup(decoder_embeddings,
                                                      targets_shifted)
                 helper = tf.contrib.seq2seq.TrainingHelper(
                     inputs=targets_emb, sequence_length=self.target_lengths)
+                #decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32).clone(cell_state=encoder_state)
+                decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32)
+                decoder = tf.contrib.seq2seq.BasicDecoder(attention_cell, helper,
+                        decoder_initial_state)
+                outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder)
+                self.decoded_best = outputs.sample_id
+                self.logits = outputs.rnn_output
             else:
-                helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
-                    embedding=decoder_embeddings,
-                    start_tokens=tf.fill([batch_size], hparams.phonemes_num-2),
-                    end_token=hparams.phonemes_num-1)
+                batch_size = tf.shape(self.inputs)[0]
+                start_tokens = tf.fill([batch_size], hparams.phonemes_num-2)
+                batch_size = batch_size * hparams.beam_width
+                encoder_outputs = tf.contrib.seq2seq.tile_batch(encoder_outputs, multiplier=hparams.beam_width)
+                input_lengths_tile = tf.contrib.seq2seq.tile_batch(self.input_lengths, multiplier=hparams.beam_width)
+                encoder_state = tf.contrib.seq2seq.tile_batch(encoder_state, multiplier=hparams.beam_width)
 
-            # TODO figure out BeamSearchDecoder (problems with computing the loss)
-            decoder = tf.contrib.seq2seq.BasicDecoder(
-                cell=attention_cell_proj,
-                helper=helper,
-                initial_state=attention_cell_proj.zero_state(batch_size,
-                                                             dtype=tf.float32))
-
-            (self.logits, _), final_state, self.decoder_length = tf.contrib.seq2seq.dynamic_decode(
-                decoder=decoder,
-                impute_finished=False,
-                maximum_iterations=tf.reduce_max(self.target_lengths) if with_target else hparams.max_iters)
-            self.decoded_best = tf.argmax(self.logits, axis=-1)
+                attention = BahdanauAttention(hparams.attention_depth, encoder_outputs, memory_sequence_length=input_lengths_tile, normalize=True)
+                attention_cell = AttentionWrapper(decoder_cell, attention, alignment_history=True)
+                attention_cell = OutputProjectionWrapper(attention_cell, hparams.phonemes_num)
+                #decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32).clone(cell_state=encoder_state)
+                decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32)
+                decoder = tf.contrib.seq2seq.BeamSearchDecoder(
+                    cell=attention_cell, embedding=decoder_embeddings,
+                    start_tokens=start_tokens, end_token=hparams.phonemes_num-1,
+                    initial_state=decoder_initial_state,
+                    beam_width=hparams.beam_width,
+                    output_layer=None,
+                    length_penalty_weight=hparams.length_penalty)
+                outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
+                    maximum_iterations=hparams.max_iters)
+                self.logits = tf.no_op()
+                # best beam
+                self.decoded_best = outputs.predicted_ids[:, :, 0]
             self.alignment = tf.transpose(final_state.alignment_history.stack(), [1, 2, 0])
 
     def add_loss(self):
         assert self.with_target
         targets_shifted = self.targets[:, 1:]
-
         max_target_len = tf.shape(targets_shifted)[1]
-        if not self.is_training:
-
-            logits_pad = tf.pad(self.logits,
-                                [[0, 0], [0, max_target_len - tf.shape(self.logits)[1]], [0, 0]],
-                                constant_values=self.hparams.phonemes_num-1)
-        else:
-            logits_pad = self.logits
-
+        batch_size = tf.shape(targets_shifted)[0]
         mask = tf.sequence_mask(self.target_lengths, max_target_len,
                                 dtype=tf.float32)
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=targets_shifted, logits=logits_pad)
+            labels=targets_shifted, logits=self.logits)
         self.loss = tf.reduce_mean(loss * mask)
 
 
