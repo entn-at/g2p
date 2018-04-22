@@ -46,6 +46,9 @@ class G2PModel:
                                                scope='unilstm')
             outputs = tf.concat([bi_outputs, uni_outputs], axis=2)
 
+            dropout_rate_cond = hparams.dropout_rate if is_training else 0.0
+            outputs = tf.layers.dropout(outputs, rate=dropout_rate_cond)
+
             outputs, _ = tf.nn.dynamic_rnn(LSTMBlockCell(hparams.lstm_units2),
                                            outputs,
                                            sequence_length=self.input_lengths,
