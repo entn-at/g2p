@@ -1,11 +1,14 @@
 
+import numpy as np
 import tensorflow as tf
+
+from nn.transformer.linear_operator_tril import LinearOperatorTriL
 
 
 def normalize(inputs,
               epsilon=1e-8,
               scope="ln",
-              reuse=None):
+              reuse=False):
     '''Applies layer normalization.
 
     Args:
@@ -13,7 +16,6 @@ def normalize(inputs,
         `batch_size`.
       epsilon: A floating number. A very small number for preventing ZeroDivision Error.
       scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
         by the same name.
 
     Returns:
@@ -24,8 +26,12 @@ def normalize(inputs,
         params_shape = inputs_shape[-1:]
 
         mean, variance = tf.nn.moments(inputs, [-1], keep_dims=True)
-        beta = tf.Variable(tf.zeros(params_shape))
-        gamma = tf.Variable(tf.ones(params_shape))
+        #beta = tf.Variable(tf.zeros(params_shape))
+        #gamma = tf.Variable(tf.ones(params_shape))
+        beta = tf.get_variable('beta', dtype=tf.float32, shape=params_shape,
+                               initializer=tf.zeros_initializer())
+        gamma = tf.get_variable('gamma', dtype=tf.float32, shape=params_shape,
+                                initializer=tf.ones_initializer())
         normalized = (inputs - mean) / ((variance + epsilon) ** (.5))
         outputs = gamma * normalized + beta
 
@@ -37,8 +43,7 @@ def embedding(inputs,
               num_units,
               zero_pad=False,
               scale=True,
-              scope="embedding",
-              reuse=None):
+              scope="embedding"):
     '''Embeds a given tensor.
 
     Args:
@@ -50,8 +55,6 @@ def embedding(inputs,
         should be constant zeros.
       scale: A boolean. If True. the outputs is multiplied by sqrt num_units.
       scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
-        by the same name.
 
     Returns:
       A `Tensor` with one more rank than inputs's. The last dimensionality
@@ -95,7 +98,7 @@ def embedding(inputs,
       [ 1.22204471 -0.96587461]]]
     ```
     '''
-    with tf.variable_scope(scope, reuse=reuse):
+    with tf.variable_scope(scope):
         lookup_table = tf.get_variable('lookup_table',
                                        dtype=tf.float32,
                                        shape=[vocab_size, num_units],
@@ -116,52 +119,15 @@ def positional_encoding(inputs,
                         num_units,
                         zero_pad=False,
                         scale=True,
-                        scope="positional_encoding",
-                        reuse=None):
-    '''Sinusoidal Positional_Encoding.
-
-    Args:
-      inputs: A 2d Tensor with shape of (N, T).
-      vocab_size: maximum possible T.
-      num_units: Output dimensionality
-      zero_pad: Boolean. If True, all the values of the first row (id = 0) should be constant zero
-      scale: Boolean. If True, the output will be multiplied by sqrt num_units(check details from paper)
-      scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
-        by the same name.
-
-    Returns:
-        A 'Tensor' with one more rank than inputs's, with the dimensionality should be 'num_units'
-    '''
-
-    #N, T = inputs.get_shape().as_list()
-    N = tf.shape(inputs)[0]
-    T = vocab_size
-    with tf.variable_scope(scope, reuse=reuse):
-        position_ind = tf.tile(tf.expand_dims(tf.range(T), 0), [N, 1])
-
-        # First part of the PE function: sin and cos argument
-        position_enc = np.array([
-                                    [pos / np.power(10000, 2. * i / num_units)
-                                     for i in range(num_units)]
-                                    for pos in range(T)])
-
-        # Second part, apply the cosine to even columns and sin to odds.
-        position_enc[:, 0::2] = np.sin(position_enc[:, 0::2])  # dim 2i
-        position_enc[:, 1::2] = np.cos(position_enc[:, 1::2])  # dim 2i+1
-
-        # Convert to a tensor
-        lookup_table = tf.convert_to_tensor(position_enc)
-
-        if zero_pad:
-            lookup_table = tf.concat((tf.zeros(shape=[1, num_units]),
-                                      lookup_table[1:, :]), 0)
-        outputs = tf.nn.embedding_lookup(lookup_table, position_ind)
-
-        if scale:
-            outputs = outputs * num_units ** 0.5
-
-        return outputs
+                        scope="positional_encoding"):
+    return embedding(
+        tf.tile(tf.expand_dims(tf.range(tf.shape(inputs)[1]), 0),
+                [tf.shape(inputs)[0], 1]),
+        vocab_size=vocab_size,
+        num_units=num_units,
+        zero_pad=zero_pad,
+        scale=scale,
+        scope=scope)
 
 
 def multihead_attention(queries,
@@ -172,7 +138,7 @@ def multihead_attention(queries,
                         is_training=True,
                         causality=False,
                         scope="multihead_attention",
-                        reuse=None):
+                        reuse=False):
     '''Applies multihead attention.
 
     Args:
@@ -184,8 +150,7 @@ def multihead_attention(queries,
       causality: Boolean. If true, units that reference the future are masked.
       num_heads: An int. Number of heads.
       scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
-        by the same name.
+      by the same name.
 
     Returns
       A 3d tensor with shape of (N, T_q, C)
@@ -230,7 +195,8 @@ def multihead_attention(queries,
         # Causality = Future blinding
         if causality:
             diag_vals = tf.ones_like(outputs[0, :, :])  # (T_q, T_k)
-            tril = tf.contrib.linalg.LinearOperatorTriL(
+            #tril = tf.contrib.linalg.LinearOperatorTriL(
+            tril = LinearOperatorTriL(
                 diag_vals).to_dense()  # (T_q, T_k)
             masks = tf.tile(tf.expand_dims(tril, 0),
                             [tf.shape(outputs)[0], 1, 1])  # (h*N, T_q, T_k)
@@ -265,7 +231,7 @@ def multihead_attention(queries,
         outputs += queries
 
         # Normalize
-        outputs = normalize(outputs)  # (N, T_q, C)
+        outputs = normalize(outputs, scope='att_ln', reuse=reuse)  # (N, T_q, C)
 
     return outputs
 
@@ -273,15 +239,13 @@ def multihead_attention(queries,
 def feedforward(inputs,
                 num_units=[256, 128],
                 scope="multihead_attention",
-                reuse=None):
+                reuse=False):
     '''Point-wise feed forward net.
 
     Args:
       inputs: A 3d tensor with shape of [N, T, C].
       num_units: A list of two integers.
       scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
-        by the same name.
 
     Returns:
       A 3d tensor with the same shape and dtype as inputs
@@ -301,7 +265,7 @@ def feedforward(inputs,
         outputs += inputs
 
         # Normalize
-        outputs = normalize(outputs)
+        outputs = normalize(outputs, scope='ff_ln', reuse=reuse)
 
     return outputs
 
