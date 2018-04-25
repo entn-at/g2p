@@ -116,7 +116,7 @@ def _preprocess_ctc_batch(batch, grapheme_pad):
 def _preprocess_attention_batch(batch, grapheme_pad, phoneme_start, phoneme_pad):
     words = [x[0] for x in batch]
     prons = [x[1] for x in batch]
-    words = [np.pad(w, (0, 1), 'constant', constant_values=grapheme_pad) for w in words]
+    #words = [np.pad(w, (0, 1), 'constant', constant_values=grapheme_pad) for w in words]
     prons = [np.pad(p, (0, 1), 'constant', constant_values=phoneme_pad) for p in prons]
 
     words_len = [len(x) for x in words]
@@ -165,7 +165,7 @@ def group_batch_pad_attention(d, grapheme_pad, phoneme_start, phoneme_pad,
 def group_batch_pad(d, g2i, p2i, group_size, batch_size, pad_type):
     if pad_type == 'ctc':
         return group_batch_pad_ctc(d, len(g2i), group_size, batch_size)
-    elif pad_type == 'attention':
+    elif pad_type == 'attention' or pad_type == 'transformer':
         return group_batch_pad_attention(d, len(g2i), len(p2i), len(p2i) + 1,
                                          group_size, batch_size)
 

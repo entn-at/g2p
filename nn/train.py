@@ -20,7 +20,7 @@ def parse_args():
     arg_parser.add_argument('--hparams', default='', help='Overwrites hparams')
     arg_parser.add_argument('--restore', type=int,
                             help='Step to restore if any')
-    arg_parser.add_argument('--model-type', choices=('ctc', 'attention'),
+    arg_parser.add_argument('--model-type', choices=('ctc', 'attention', 'transformer'),
                             default='ctc', help='What kind of model to train')
 
     args = arg_parser.parse_args()
@@ -61,6 +61,9 @@ def main():
     elif args.model_type == 'attention':
         from nn.hparams_attention import hparams
         from nn.model_attention import G2PModel
+    elif args.model_type == 'transformer':
+        from nn.transformer.hparams import hparams
+        from nn.transformer.model import G2PModel
 
     hparams.parse(args.hparams)
 
