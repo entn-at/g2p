@@ -9,3 +9,4 @@ Performance on amepd (using split by read_utils) in WER / stressless WER:
 * cmu seq2seq g2p: 0.3087 / 0.2708
 * ctc:  0.3298 / 0.2872
 * attention: 0.3302 / 0.2892
+* transformer: 0.3173 / 0.2771
