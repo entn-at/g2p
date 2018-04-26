@@ -137,10 +137,13 @@ def main():
                 for dev_batch in ddev_batched:
                     output = sess.run([dev_model.decoded_best],
                                       feed_dict=dev_model.create_feed_dict(dev_batch))
-                    output = np.squeeze(output[0])[:, :, 0]
 
-                    orig = decode_pron(i2p, dev_batch[2], is_sparse=args.model_type == 'ctc')
-                    predicted = decode_pron(i2p, output, is_sparse=args.model_type == 'ctc')
+                    orig = decode_pron(i2p, dev_batch[2],
+                                       is_sparse=args.model_type == 'ctc',
+                                       with_stop_symbol=args.model_type != 'ctc')
+                    predicted = decode_pron(i2p, output,
+                                            is_sparse=args.model_type == 'ctc',
+                                            with_stop_symbol=args.model_type != 'ctc')
 
                     words_num += len(orig)
                     for o, p in zip(orig, predicted):

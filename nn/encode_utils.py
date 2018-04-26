@@ -170,7 +170,7 @@ def group_batch_pad(d, g2i, p2i, group_size, batch_size, pad_type):
                                          group_size, batch_size)
 
 
-def decode_pron(i2p, pron, is_sparse=True):
+def decode_pron(i2p, pron, is_sparse=True, with_stop_symbol=False):
     if is_sparse:
         indices, values, shape = pron
         arr = np.ones(shape) * len(i2p)
@@ -178,7 +178,15 @@ def decode_pron(i2p, pron, is_sparse=True):
         pron = arr
     decoded = []
     for encoded in pron:
-        decoded.append([i2p[x] for x in encoded if x < len(i2p)])
+        if with_stop_symbol:
+            decoded_tmp = []
+            for x in encoded:
+                if x == len(i2p) + 1:
+                    break
+                decoded_tmp.append(i2p[x])
+            decoded.append(decoded_tmp)
+        else:
+            decoded.append([i2p[x] for x in encoded if x < len(i2p)])
     return decoded
 
 

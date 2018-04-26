@@ -72,8 +72,10 @@ def main():
         output = sess.run(model.decoded_best,
                           feed_dict=model.create_feed_dict(batch))
 
-        orig = decode_pron(i2p, batch[2], is_sparse=args.model_type == 'ctc')
-        predicted = decode_pron(i2p, output, is_sparse=args.model_type == 'ctc')
+        orig = decode_pron(i2p, batch[2], is_sparse=args.model_type == 'ctc',
+                           with_stop_symbol=args.model_type != 'ctc')
+        predicted = decode_pron(i2p, output, is_sparse=args.model_type == 'ctc',
+                                with_stop_symbol=args.model_type != 'ctc')
 
         words_num += len(orig)
         for o, p in zip(orig, predicted):
