@@ -14,7 +14,7 @@ from read_utils import *
 
 
 def parse_args():
-    arg_parser = argparse.ArgumentParser(description='Trains G2P model')
+    arg_parser = argparse.ArgumentParser(description='Evals G2P model')
     arg_parser.add_argument('--dict', required=True,
                             help='Dictionary to train on')
     arg_parser.add_argument('--model-dir', default='g2p_model', required=True,
@@ -22,7 +22,7 @@ def parse_args():
     arg_parser.add_argument('--hparams', default='', help='Overwrites hparams')
     arg_parser.add_argument('--restore', type=int, required=True,
                             help='Step to restore from')
-    arg_parser.add_argument('--model-type', choices=('ctc', 'attention'),
+    arg_parser.add_argument('--model-type', choices=('ctc', 'attention', 'transformer'),
                             help='Type of model')
 
     args = arg_parser.parse_args()
