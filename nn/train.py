@@ -127,6 +127,16 @@ def main():
                 print(' Eval: step %d; wer %f; stressless wer %f; eval took %f' %
                       (step, wer, stressless_wer, eval_took))
 
+                summary_writer.add_summary(
+                    tf.Summary(value=[tf.Summary.Value(tag='wer', simple_value=wer)]),
+                    global_step=step)
+                summary_writer.add_summary(
+                    tf.Summary(value=[tf.Summary.Value(tag='eval_speed', simple_value=eval_took)]),
+                    global_step=step)
+                summary_writer.add_summary(
+                    tf.Summary(value=[tf.Summary.Value(tag='stressless_wer', simple_value=stressless_wer)]),
+                    global_step=step)
+
         epoch += 1
         if epoch % hparams.reshuffle_every_nth == 0:
             d_batched = group_batch_pad(traind, g2i, p2i, hparams.group_size,
