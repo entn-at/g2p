@@ -8,6 +8,7 @@ import tensorflow as tf
 
 from read_utils import *
 from nn.encode_utils import *
+from nn.utils import *
 
 
 def parse_args():
@@ -55,16 +56,7 @@ class AverageWindow:
 def main():
     args = parse_args()
 
-    if args.model_type == 'ctc':
-        from nn.hparams_ctc import hparams
-        from nn.model_ctc import G2PModel
-    elif args.model_type == 'attention':
-        from nn.hparams_attention import hparams
-        from nn.model_attention import G2PModel
-    elif args.model_type == 'transformer':
-        from nn.transformer.hparams import hparams
-        from nn.transformer.model import G2PModel
-
+    G2PModel, hparams = import_model_type(args.model_type)
     hparams.parse(args.hparams)
 
     d = read_cmudict(args.train)
