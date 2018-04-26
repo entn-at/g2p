@@ -124,10 +124,14 @@ class G2PModel:
 
     def add_loss(self):
         decoder_targets = self.targets[:, 1:]
-        decoder_targets_sm = label_smoothing(tf.one_hot(decoder_targets,
-                                                        self.hparams.phonemes_num))
-        loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits,
-                                                            labels=decoder_targets_sm)
+        if self.hparams.label_smoothing:
+            decoder_targets_sm = label_smoothing(tf.one_hot(decoder_targets,
+                                                            self.hparams.phonemes_num))
+            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits,
+                                                           labels=decoder_targets_sm)
+        else:
+            loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=decoder_targets, logits=self.logits)
         max_target_len = tf.shape(decoder_targets)[1]
         mask = tf.sequence_mask(self.target_lengths, max_target_len,
                                                 dtype=tf.float32)
