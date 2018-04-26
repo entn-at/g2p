@@ -60,7 +60,7 @@ def main():
                                 hparams.batch_size, args.model_type)
     print('**Info: data grouped and batched')
 
-    wer, stressless_wer, eval_took = compute_wer(model, d_batched, i2p,
+    wer, stressless_wer, eval_took = compute_wer(sess, model, d_batched, i2p,
                                                  args.model_type)
     print(' Eval: wer %f; stressless wer %f; eval took %f' %
           (wer, stressless_wer, eval_took))

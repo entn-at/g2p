@@ -123,7 +123,7 @@ def main():
 
             if step % hparams.eval_every_nth == 0 and args.dev:
                 wer, stressless_wer, eval_took = compute_wer(
-                        dev_model, ddev_batched, i2p, args.model_type)
+                        sess, dev_model, ddev_batched, i2p, args.model_type)
                 print(' Eval: step %d; wer %f; stressless wer %f; eval took %f' %
                       (step, wer, stressless_wer, eval_took))
 

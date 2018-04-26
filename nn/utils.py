@@ -6,19 +6,19 @@ from nn.encode_utils import *
 
 
 def import_model_type(model_type):
-    if args.model_type == 'ctc':
+    if model_type == 'ctc':
         from nn.ctc.hparams import hparams
         from nn.ctc.model import G2PModel
-    elif args.model_type == 'attention':
+    elif model_type == 'attention':
         from nn.attention.hparams import hparams
         from nn.attention.model import G2PModel
-    elif args.model_type == 'transformer':
+    elif model_type == 'transformer':
         from nn.transformer.hparams import hparams
         from nn.transformer.model import G2PModel
     return G2PModel, hparams
 
 
-def compute_wer(model, batched_dict, i2p, model_type):
+def compute_wer(sess, model, batched_dict, i2p, model_type):
     wer = 0.0
     stressless_wer = 0.0
     words_num = 0
