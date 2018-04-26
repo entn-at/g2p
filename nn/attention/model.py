@@ -108,7 +108,8 @@ class G2PModel:
                     maximum_iterations=hparams.max_iters)
                 self.logits = tf.no_op()
                 # best beam
-                self.decoded_best = outputs.predicted_ids[:, :, 0]
+                self.decoded_best = tf.identity(outputs.predicted_ids[:, :, 0],
+                                                name='predicted_1best')
                 self.alignment = tf.transpose(final_state.alignment_history.stack(), [1, 2, 0])
 
     def add_loss(self):

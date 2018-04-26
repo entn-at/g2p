@@ -59,7 +59,8 @@ class G2PModel:
             logits_transp = tf.transpose(self.logits, (1, 0, 2))
             self.decoded, self.probs = tf.nn.ctc_beam_search_decoder(
                 logits_transp, self.input_lengths, top_paths=self.hparams.nbest)
-            self.decoded_best = self.decoded[0]
+            self.decoded_best = tf.identity(self.decoded[0],
+                                            name='predicted_1best')
 
     def add_loss(self):
         assert self.with_target

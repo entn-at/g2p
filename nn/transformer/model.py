@@ -71,7 +71,8 @@ class G2PModel:
 
                 _, dec = tf.while_loop(condition, body, loop_vars=[i_0, decoder_inputs0],
                         shape_invariants=[i_0.get_shape(), tf.TensorShape([None, None])])
-                self.decoded_best = dec[:, 1:]
+                self.decoded_best = tf.identity(dec[:, 1:],
+                                                name='predicted_1best')
 
     def decoder(self, decoder_inputs, reuse=False):
         with tf.variable_scope('decoder', reuse=reuse):
