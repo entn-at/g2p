@@ -101,7 +101,7 @@ def _preprocess_ctc_batch(batch, grapheme_pad):
     words = [x[0] for x in batch]
     prons = [x[1] for x in batch]
     # to ensure that grapheme sequence is longer than phoneme seq
-    words = [np.pad(words, (0, 3), 'constant', constant_values=grapheme_pad) for w in words]
+    words = [np.pad(w, (0, 3), 'constant', constant_values=grapheme_pad) for w in words]
     for w, p in zip(words, prons):
         assert len(w) >= len(p)
     seq_lens = [len(x) for x in words]
