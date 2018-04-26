@@ -122,35 +122,8 @@ def main():
                 saver.save(sess, model_prefix, global_step=step)
 
             if step % hparams.eval_every_nth == 0 and args.dev:
-                wer = 0.0
-                stressless_wer = 0.0
-                words_num = 0
-                eval_start = time.time()
-                for dev_batch in ddev_batched:
-                    output = sess.run([dev_model.decoded_best],
-                                      feed_dict=dev_model.create_feed_dict(dev_batch))
-
-                    orig = decode_pron(i2p, dev_batch[2],
-                                       is_sparse=args.model_type == 'ctc',
-                                       with_stop_symbol=args.model_type != 'ctc')
-                    predicted = decode_pron(i2p, output,
-                                            is_sparse=args.model_type == 'ctc',
-                                            with_stop_symbol=args.model_type != 'ctc')
-
-                    words_num += len(orig)
-                    for o, p in zip(orig, predicted):
-                        oo = ' '.join(o)
-                        pp = ' '.join(p)
-                        if oo != pp:
-                            wer += 1
-                        oo = ' '.join(drop_stress(o))
-                        pp = ' '.join(drop_stress(p))
-                        if oo != pp:
-                            stressless_wer += 1
-
-                wer /= float(words_num)
-                stressless_wer /= float(words_num)
-                eval_took = time.time() - eval_start
+                wer, stressless_wer, eval_took = compute_wer(
+                        dev_model, ddev_batched, i2p, args.model_type)
                 print(' Eval: step %d; wer %f; stressless wer %f; eval took %f' %
                       (step, wer, stressless_wer, eval_took))
 
