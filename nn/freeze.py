@@ -4,8 +4,9 @@ import os
 import sys
 import re
 import argparse
-import tensorflow as tf
+from shutil import copyfile
 
+import tensorflow as tf
 from tensorflow.core.example import example_pb2
 from tensorflow.core.framework import graph_pb2
 from tensorflow.core.protobuf import saver_pb2
@@ -33,15 +34,17 @@ def freeze_model(model_path, freeze_dir, output_graph_name):
 
     name = re.sub(r'-\d+$', '', os.path.basename(model_path))
     model_dir = os.path.dirname(model_path)
+    model_type, _, _ = read_meta('%s/meta' % model_dir)
 
     if not os.path.isdir(freeze_dir):
         os.makedirs(freeze_dir)
+    copyfile('%s/meta' % model_dir, '%s/meta' % freeze_dir)
     checkpoint_prefix = os.path.join(freeze_dir, "saved_checkpoint")
     checkpoint_state_name = "checkpoint_state"
     input_graph_name = "input_graph.pb"
 
-    G2PModel, hparams = import_model_type('ctc')
-    
+    G2PModel, hparams = import_model_type(model_type)
+
     with ops.Graph().as_default():
         with tf.Session() as sess:
             model = G2PModel(hparams, is_training=False, with_target=False, reuse=False)
