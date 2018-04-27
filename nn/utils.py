@@ -30,7 +30,7 @@ def compute_wer(sess, model, batched_dict, i2p, model_type):
                            is_sparse=model_type == 'ctc',
                            with_stop_symbol=model_type != 'ctc')
         predicted = decode_pron(i2p, output,
-                                is_sparse=model_type != 'ctc',
+                                is_sparse=False,
                                 with_stop_symbol=model_type != 'ctc')
 
         words_num += len(orig)

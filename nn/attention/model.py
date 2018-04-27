@@ -9,7 +9,9 @@ from nn.modules import *
 
 class G2PModel:
 
-    def create_attention_cell(depth, memory, seq_len, cell, alignment_history):
+    @staticmethod
+    def create_attention_cell(depth, memory, seq_len, cell,
+                              alignment_history=False):
         attention = BahdanauAttention(depth,
                                       memory,
                                       memory_sequence_length=seq_len,
@@ -65,7 +67,7 @@ class G2PModel:
 
             if is_training:
                 batch_size = tf.shape(self.inputs)[0]
-                attention_cell = create_attention_cell(
+                attention_cell = self.create_attention_cell(
                         hparams.attention_depth, encoder_outputs,
                         self.input_lengths, decoder_cell,
                         alignment_history=False)
@@ -80,37 +82,59 @@ class G2PModel:
                 decoder = tf.contrib.seq2seq.BasicDecoder(attention_cell, helper,
                         decoder_initial_state)
                 outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder)
-                self.decoded_best = outputs.sample_id
+                self.decoded_best = tf.identity(outputs.sample_id, name='predicted_1best')
                 self.logits = outputs.rnn_output
+                self.probs = tf.nn.softmax(self.logits, name='probs')
             else:
-                batch_size = tf.shape(self.inputs)[0]
-                start_tokens = tf.fill([batch_size], hparams.phonemes_num-2)
-                batch_size = batch_size * hparams.beam_width
-                encoder_outputs = tf.contrib.seq2seq.tile_batch(encoder_outputs, multiplier=hparams.beam_width)
-                input_lengths_tile = tf.contrib.seq2seq.tile_batch(self.input_lengths, multiplier=hparams.beam_width)
-                encoder_state = tf.contrib.seq2seq.tile_batch(encoder_state, multiplier=hparams.beam_width)
+                if self.hparams.beam_width == 1:
+                    batch_size = tf.shape(self.inputs)[0]
+                    attention_cell = self.create_attention_cell(
+                            hparams.attention_depth, encoder_outputs,
+                            self.input_lengths, decoder_cell,
+                            alignment_history=False)
+                    attention_cell = OutputProjectionWrapper(attention_cell, hparams.phonemes_num)
+                    helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
+                            embedding=decoder_embeddings,
+                            start_tokens=tf.fill([batch_size], hparams.phonemes_num-2),
+                            end_token=hparams.phonemes_num-1)
+                    decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32)
+                    decoder = tf.contrib.seq2seq.BasicDecoder(attention_cell, helper,
+                            decoder_initial_state)
+                    outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
+                            maximum_iterations=self.hparams.max_phoneme_seq_len)
+                    self.decoded_best = tf.identity(outputs.sample_id, name='predicted_1best')
+                    self.logits = outputs.rnn_output
+                    self.probs = tf.nn.softmax(self.logits, name='probs')
+                else:
+                    batch_size = tf.shape(self.inputs)[0]
+                    start_tokens = tf.fill([batch_size], hparams.phonemes_num-2)
+                    batch_size = batch_size * hparams.beam_width
+                    encoder_outputs = tf.contrib.seq2seq.tile_batch(encoder_outputs, multiplier=hparams.beam_width)
+                    input_lengths_tile = tf.contrib.seq2seq.tile_batch(self.input_lengths, multiplier=hparams.beam_width)
+                    encoder_state = tf.contrib.seq2seq.tile_batch(encoder_state, multiplier=hparams.beam_width)
 
-                attention_cell = create_attention_cell(
-                        hparams.attention_depth, encoder_outputs,
-                        input_lengths_tile, decoder_cell,
-                        alignment_history=True)
-                attention_cell = OutputProjectionWrapper(attention_cell, hparams.phonemes_num)
-                #decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32).clone(cell_state=encoder_state)
-                decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32)
-                decoder = tf.contrib.seq2seq.BeamSearchDecoder(
-                    cell=attention_cell, embedding=decoder_embeddings,
-                    start_tokens=start_tokens, end_token=hparams.phonemes_num-1,
-                    initial_state=decoder_initial_state,
-                    beam_width=hparams.beam_width,
-                    output_layer=None,
-                    length_penalty_weight=hparams.length_penalty)
-                outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
-                    maximum_iterations=hparams.max_iters)
-                self.logits = tf.no_op()
-                # best beam
-                self.decoded_best = tf.identity(outputs.predicted_ids[:, :, 0],
-                                                name='predicted_1best')
-                self.alignment = tf.transpose(final_state.alignment_history.stack(), [1, 2, 0])
+                    attention_cell = self.create_attention_cell(
+                            hparams.attention_depth, encoder_outputs,
+                            input_lengths_tile, decoder_cell,
+                            alignment_history=False)
+                    attention_cell = OutputProjectionWrapper(attention_cell, hparams.phonemes_num)
+                    decoder_initial_state = attention_cell.zero_state(batch_size, tf.float32)
+                    decoder = tf.contrib.seq2seq.BeamSearchDecoder(
+                        cell=attention_cell, embedding=decoder_embeddings,
+                        start_tokens=start_tokens, end_token=hparams.phonemes_num-1,
+                        initial_state=decoder_initial_state,
+                        beam_width=hparams.beam_width,
+                        output_layer=None,
+                        length_penalty_weight=hparams.length_penalty)
+                    outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
+                        maximum_iterations=hparams.max_iters)
+                    self.logits = tf.no_op()
+                    print('**Warning! You could not be able to build lattice with beam_width > 1')
+                    self.probs = tf.no_op()
+                    # best beam
+                    self.decoded_best = tf.identity(outputs.predicted_ids[:, :, 0],
+                                                    name='predicted_1best')
+                    #self.alignment = tf.transpose(final_state.alignment_history.stack(), [1, 2, 0])
 
     def add_loss(self):
         assert self.with_target

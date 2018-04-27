@@ -183,6 +183,9 @@ def decode_pron(i2p, pron, is_sparse=True, with_stop_symbol=False):
             for x in encoded:
                 if x == len(i2p) + 1:
                     break
+                if x == len(i2p):
+                    # start symbol - happens for random model
+                    continue
                 decoded_tmp.append(i2p[x])
             decoded.append(decoded_tmp)
         else:

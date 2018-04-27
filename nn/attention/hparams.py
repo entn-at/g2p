@@ -6,6 +6,8 @@ hparams = tf.contrib.training.HParams(
     graphemes_num=29,
     phonemes_num=73,
 
+    max_phoneme_seq_len=35,
+
     embedding_dim=512,
     zonout_prob=(0.1, 0.01),
     dropout_rate=0.5,
@@ -17,7 +19,7 @@ hparams = tf.contrib.training.HParams(
     rnn_type='zn_lstm',
     encoder_lstm_units=512,
     attention_depth=256,
-    beam_width=10,
+    beam_width=1,
     length_penalty=0.0,
     decoder_lstm_units=512,
     decoder_embedding_dim=512,
