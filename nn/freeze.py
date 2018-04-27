@@ -44,6 +44,9 @@ def freeze_model(model_path, freeze_dir, output_graph_name):
     input_graph_name = "input_graph.pb"
 
     G2PModel, hparams = import_model_type(model_type)
+    with open('%s/hparams' % model_dir, 'r') as infp:
+        loaded = json.load(infp)
+        hparams.parse_json(loaded)
 
     with ops.Graph().as_default():
         with tf.Session() as sess:
