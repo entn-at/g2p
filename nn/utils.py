@@ -48,3 +48,26 @@ def compute_wer(sess, model, batched_dict, i2p, model_type):
     stressless_wer /= float(words_num)
     eval_took = time.time() - eval_start
     return wer, stressless_wer, eval_took
+
+
+def write_meta(model_type, g2i, p2i, outpath):
+    with open(outpath, 'w') as outfp:
+        outfp.write('%s\n' % model_type)
+        graphemes = [x[0] for x in sorted(g2i.items(), key=lambda x: x[1])]
+        outfp.write('%s\n' % ' '.join(graphemes))
+        phonemes = [x[0] for x in sorted(p2i.items(), key=lambda x: x[1])]
+        outfp.write('%s\n' % ' '.join(phonemes))
+
+
+def read_meta(path):
+    with open(path, 'r') as infp:
+        model_type = infp.readline().strip()
+        graphemes = infp.readline().strip().split()
+        g2i = {}
+        for i, g in enumerate(graphemes):
+            g2i[g] = i
+        phonemes = infp.readline().strip().split()
+        p2i = {}
+        for i, p in enumerate(phonemes):
+            p2i[p] = i
+    return model_type, g2i, p2i

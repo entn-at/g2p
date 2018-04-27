@@ -22,8 +22,6 @@ def parse_args():
     arg_parser.add_argument('--hparams', default='', help='Overwrites hparams')
     arg_parser.add_argument('--restore', type=int, required=True,
                             help='Step to restore from')
-    arg_parser.add_argument('--model-type', choices=('ctc', 'attention', 'transformer'),
-                            help='Type of model')
 
     args = arg_parser.parse_args()
     if not os.path.isfile(args.dict):
@@ -34,15 +32,11 @@ def parse_args():
 
 
 def main():
+
     args = parse_args()
-
-    G2PModel, hparams = import_model_type(args.model_type)
-
+    model_type, g2i, p2i = read_meta('%s/meta' % args.model_dir)
+    G2PModel, hparams = import_model_type(model_type)
     hparams.parse(args.hparams)
-    with open('%s/g2i.json' % args.model_dir, 'r') as infp:
-        g2i = json.load(infp)
-    with open('%s/p2i.json' % args.model_dir, 'r') as infp:
-        p2i = json.load(infp)
     d = read_cmudict(args.dict)
     d = encode_dict(d, g2i, p2i)
     i2p = {v: k for k, v in p2i.items()}
@@ -57,11 +51,11 @@ def main():
     saver.restore(sess, model_path)
 
     d_batched = group_batch_pad(d, g2i, p2i, hparams.group_size,
-                                hparams.batch_size, args.model_type)
+                                hparams.batch_size, model_type)
     print('**Info: data grouped and batched')
 
     wer, stressless_wer, eval_took = compute_wer(sess, model, d_batched, i2p,
-                                                 args.model_type)
+                                                 model_type)
     print(' Eval: wer %f; stressless wer %f; eval took %f' %
           (wer, stressless_wer, eval_took))
 

@@ -62,10 +62,7 @@ def main():
     d = read_cmudict(args.train)
     g2i = get_graphemes_map(d)
     p2i = get_phonemes_map(d)
-    with open('%s/g2i.json' % args.model_dir, 'w') as outfp:
-        json.dump(g2i, outfp)
-    with open('%s/p2i.json' % args.model_dir, 'w') as outfp:
-        json.dump(p2i, outfp)
+    write_meta(args.model_type, g2i, p2i, '%s/meta' % args.model_dir)
 
     traind = encode_dict(d, g2i, p2i)
     if args.dev:
