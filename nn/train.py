@@ -58,6 +58,8 @@ def main():
 
     G2PModel, hparams = import_model_type(args.model_type)
     hparams.parse(args.hparams)
+    with open('%s/hparams' % args.model_dir, 'w') as outfp:
+        json.dump(hparams.to_json(), outfp)
 
     d = read_cmudict(args.train)
     g2i = get_graphemes_map(d)

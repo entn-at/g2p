@@ -19,7 +19,6 @@ def parse_args():
                             help='Dictionary to train on')
     arg_parser.add_argument('--model-dir', default='g2p_model', required=True,
                             help='Directory to put model to')
-    arg_parser.add_argument('--hparams', default='', help='Overwrites hparams')
     arg_parser.add_argument('--restore', type=int, required=True,
                             help='Step to restore from')
 
@@ -36,7 +35,9 @@ def main():
     args = parse_args()
     model_type, g2i, p2i = read_meta('%s/meta' % args.model_dir)
     G2PModel, hparams = import_model_type(model_type)
-    hparams.parse(args.hparams)
+    with open('%s/hparams' % args.model_dir, 'r') as infp:
+        loaded = json.load(infp)
+        hparams.parse_json(loaded)
     d = read_cmudict(args.dict)
     d = encode_dict(d, g2i, p2i)
     i2p = {v: k for k, v in p2i.items()}
