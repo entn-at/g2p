@@ -52,28 +52,30 @@ class G2PModel:
                                                num_units=[4 * self.hparams.hidden_units,
                                                           self.hparams.hidden_units], reuse=reuse)
 
-        with tf.variable_scope("decoder"):
-            if is_training:
-                decoder_inputs = self.targets[:, :-1]
-                self.logits = self.decoder(decoder_inputs, reuse=reuse)
-                self.decoded_best = tf.to_int32(tf.arg_max(self.logits, dimension=-1))
-            else:
-                batch_size = tf.shape(self.inputs)[0]
-                decoder_inputs0 = tf.tile([[self.hparams.phonemes_num - 2]], [batch_size, 1])
-                i_0 = tf.constant(0)
+        if is_training:
+            decoder_inputs = self.targets[:, :-1]
+            self.logits = self.decoder(decoder_inputs, reuse=reuse)
+            self.decoded_best = tf.to_int32(tf.arg_max(self.logits, dimension=-1))
+        else:
+            batch_size = tf.shape(self.inputs)[0]
+            arr = np.zeros((1, 1, self.hparams.phonemes_num))
+            arr[0, 0, self.hparams.phonemes_num - 2] = 1
+            arr = tf.convert_to_tensor(arr, dtype=tf.float32)
+            decoder_inputs0 = tf.tile(arr, [batch_size, 1, 1])
+            i_0 = tf.constant(0)
 
-                condition = lambda i, inpts: i < tf.reduce_max(self.target_lengths)
+            condition = lambda i, inpts: i < tf.reduce_max(self.target_lengths)
 
-                def body(i, inpts):
-                    otpts = self.decoder(inpts, reuse=reuse)
-                    pred = tf.to_int32(tf.arg_max(otpts[:, -1:, :], dimension=-1))
-                    inpts = tf.concat([inpts, pred], 1)
-                    return i+1, inpts
+            def body(i, inpts):
+                otpts = self.decoder(tf.to_int32(tf.arg_max(inpts, dimension=-1)), reuse=reuse)
+                inpts = tf.concat([inpts, otpts[:, -1:, :]], 1)
+                return i+1, inpts
 
-                _, dec = tf.while_loop(condition, body, loop_vars=[i_0, decoder_inputs0],
-                        shape_invariants=[i_0.get_shape(), tf.TensorShape([None, None])])
-                self.decoded_best = tf.identity(dec[:, 1:],
-                                                name='predicted_1best')
+            _, dec = tf.while_loop(condition, body, loop_vars=[i_0, decoder_inputs0],
+                    shape_invariants=[i_0.get_shape(), tf.TensorShape([None, None, self.hparams.phonemes_num])])
+            self.decoded_best = tf.identity(tf.to_int32(tf.arg_max(dec[:, 1:], dimension=-1)),
+                                            name='predicted_1best')
+            self.probs = tf.nn.softmax(dec, name='probs')
 
     def decoder(self, decoder_inputs, reuse=False):
         with tf.variable_scope('decoder', reuse=reuse):
