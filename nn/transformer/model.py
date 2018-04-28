@@ -24,11 +24,12 @@ class G2PModel:
                                       num_units=self.hparams.hidden_units,
                                       scale=True,
                                       scope="enc_embed")
-                self.enc += positional_encoding(self.inputs,
-                                                vocab_size=self.hparams.max_grapheme_seq_len,
-                                                num_units=self.hparams.hidden_units,
-                                                scale=False,
-                                                scope="enc_pe")
+                if self.hparams.positional_encoding:
+                    self.enc += positional_encoding(self.inputs,
+                                                    vocab_size=self.hparams.max_grapheme_seq_len,
+                                                    num_units=self.hparams.hidden_units,
+                                                    scale=False,
+                                                    scope="enc_pe")
 
                 self.enc = tf.layers.dropout(self.enc,
                                              rate=hparams.dropout_rate,
@@ -83,11 +84,12 @@ class G2PModel:
                             scale=True,
                             scope="dec_embed")
 
-            dec += positional_encoding(decoder_inputs,
-                                       vocab_size=self.hparams.max_phoneme_seq_len,
-                                       num_units=self.hparams.hidden_units,
-                                       scale=False,
-                                       scope="dec_pe")
+            if self.hparams.positional_encoding:
+                dec += positional_encoding(decoder_inputs,
+                                           vocab_size=self.hparams.max_phoneme_seq_len,
+                                           num_units=self.hparams.hidden_units,
+                                           scale=False,
+                                           scope="dec_pe")
 
             ## Dropout
             dec = tf.layers.dropout(dec, rate=self.hparams.dropout_rate,

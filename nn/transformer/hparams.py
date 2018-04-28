@@ -15,6 +15,7 @@ hparams = tf.contrib.training.HParams(
     decoder_blocks=6,
     heads_num=8,
     label_smoothing=True,
+    positional_encoding=True,
 
     batch_size=256,
     group_size=16,
