@@ -56,10 +56,6 @@ def freeze_model(model_path, freeze_dir, output_graph_name):
             sess.run(tf.global_variables_initializer())
             saver.restore(sess, model_path) 
 
-            #graph = sess.graph
-            #print([node.name for node in graph.as_graph_def().node])
-
-
             saver = saver_lib.Saver()
             checkpoint_path = saver.save(
                 sess,
