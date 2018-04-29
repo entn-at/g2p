@@ -60,9 +60,9 @@ class G2PModel:
             logits_transp = tf.transpose(self.logits, (1, 0, 2))
             self.decoded, self.seq_probs = tf.nn.ctc_beam_search_decoder(
                 logits_transp, self.input_lengths, top_paths=self.hparams.nbest)
-            self.decoded_best = tf.sparse_tensor_to_dense(self.decoded[0],
-                                                          default_value=hparams.phonemes_num-1,
-                                                          name='predicted_1best')
+            self.decoded_best = tf.to_int32(tf.sparse_tensor_to_dense(
+                self.decoded[0], default_value=hparams.phonemes_num-1),
+                name='predicted_1best')
 
     def add_loss(self):
         assert self.with_target
