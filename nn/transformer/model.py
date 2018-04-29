@@ -58,14 +58,13 @@ class G2PModel:
                 self.decoded_best = tf.to_int32(tf.arg_max(self.logits, dimension=-1))
             else:
                 batch_size = tf.shape(self.inputs)[0]
-                seq_len = tf.shape(self.inputs)[1]
                 arr = np.zeros((1, 1, self.hparams.phonemes_num))
                 arr[0, 0, self.hparams.phonemes_num - 2] = 1
                 arr = tf.convert_to_tensor(arr, dtype=tf.float32)
                 decoder_inputs0 = tf.tile(arr, [batch_size, 1, 1])
                 i_0 = tf.constant(0)
 
-                condition = lambda i, inpts: i < seq_len + 3
+                condition = lambda i, inpts: i <  tf.reduce_max(self.input_lengths) + 3
 
                 def body(i, inpts):
                     otpts = self.decoder(tf.to_int32(tf.arg_max(inpts, dimension=-1)), reuse=reuse)
