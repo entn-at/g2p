@@ -2,14 +2,18 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <cmath>
 
 #include "tensorflow/core/graph/graph_def_builder.h"
 #include "tensorflow/core/public/session.h"
 #include "tensorflow/core/platform/env.h"
 
+#include "fst/fstlib.h"
+
 #include "g2p.h"
 
 using namespace std;
+using namespace fst;
 using namespace tensorflow;
 
 static void
@@ -81,7 +85,7 @@ G2P::Phonetisize(const char *instr)
 	if (instr_len == 0) {
 		return;
 	}
-	fprintf(stderr, "%s", instr);
+	//fprintf(stderr, "%s", instr);
 	vector<pair<string, Tensor> > inputs;
 	int alloc_len = instr_len;
 	if (strcmp(_nn_model_type, "ctc") == 0) {
@@ -107,38 +111,82 @@ G2P::Phonetisize(const char *instr)
 	slen_map(0) = alloc_len;
 	inputs.push_back(std::make_pair("grapeheme_seq_len_ph", slen_input));
 
-	std::vector<tensorflow::Tensor> outputs;
-	Status status = _session->Run(inputs, {"g2p/predicted_1best"}, {}, &outputs);
-
-	/*auto pmap = outputs[0].tensor<float,3>();
-	for (int i = 0; i < (int)outputs[0].dim_size(1); i++) {
-		for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
-			fprintf(stderr, "%f ", pmap(0, i, j));
+	if (_best_nn_hyp) {
+		std::vector<tensorflow::Tensor> outputs;
+		Status status = _session->Run(inputs, {"g2p/predicted_1best"}, {}, &outputs);
+		if (!status.ok()) {
+			fprintf(stderr, "**Error! Failed to run prediction\n");
+			fprintf(stderr, "**Error! status: %s\n", status.ToString().c_str());
+			exit(1);
+		}
+		auto phonemes_map = outputs[0].tensor<int, 2>();
+		bool first_space = true;
+		for (int i = 0; i < (int)outputs[0].dim_size(1); i++) {
+			if (phonemes_map(0, i) >= _i2p.size()) {
+				if (strcmp(_nn_model_type, "ctc") == 0) {
+					continue;
+				} else if (strcmp(_nn_model_type, "attention") == 0 ||
+						strcmp(_nn_model_type, "transformer") == 0) {
+					break;
+				} else {
+					fprintf(stderr, "**Error! Unexpected model type %s\n", _nn_model_type);
+				}
+			}
+			fprintf(stderr, "%s", (first_space ? "\t" : " "));
+			first_space = false;
+			fprintf(stderr, "%s", _i2p.find((int)phonemes_map(0, i))->second.c_str());
 		}
 		fprintf(stderr, "\n");
-	}*/
-
-	if (!status.ok()) {
-		fprintf(stderr, "**Error! Failed to run prediction\n");
-		fprintf(stderr, "**Error! status: %s\n", status.ToString().c_str());
-		exit(1);
 	}
-	auto phonemes_map = outputs[0].tensor<int, 2>();
-	bool first_space = true;
-	for (int i = 0; i < (int)outputs[0].dim_size(1); i++) {
-		if (phonemes_map(0, i) >= _i2p.size()) {
-			if (strcmp(_nn_model_type, "ctc") == 0) {
-				continue;
-			} else if (strcmp(_nn_model_type, "attention") == 0 ||
-					strcmp(_nn_model_type, "transformer") == 0) {
-				break;
-			} else {
-				fprintf(stderr, "**Error! Unexpected model type %s\n", _nn_model_type);
+
+	if (_nn_lattice) {
+		std::vector<tensorflow::Tensor> outputs;
+		Status status = _session->Run(inputs, {"g2p/probs"}, {}, &outputs);
+		if (!status.ok()) {
+			fprintf(stderr, "**Error! Failed to run prediction\n");
+			fprintf(stderr, "**Error! status: %s\n", status.ToString().c_str());
+			exit(1);
+		}
+		auto probs_map = outputs[0].tensor<float, 3>();
+		int new_state = 1;
+		StdVectorFst nn_fst;
+		nn_fst.AddState();
+		nn_fst.SetStart(0);
+		for (int i = 0; i < (int)outputs[0].dim_size(1); i++) {
+			float max_prob = 0.0;
+			int probable_phone = -1;
+			for (int j = 0; j < (int)outputs[0].dim_size(2); j++) { 
+				if (probs_map(0, i, j) > max_prob) {
+					max_prob = probs_map(0, i, j);
+					probable_phone = j;
+				}
+			}
+			fprintf(stderr, "at position %d, most probable %d with prob %f\n", i, probable_phone, max_prob);
+			int layer_start = new_state;
+			for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
+				if (i == 0) {
+					nn_fst.AddArc(0, StdArc(j, j, -log(probs_map(0, i, j)), new_state));
+					nn_fst.AddState();
+					new_state++;
+				} else {
+					int diff = (int)outputs[0].dim_size(2);
+					for (int k = 0; k < (int)outputs[0].dim_size(2); k++) {
+						nn_fst.AddArc(layer_start - diff + k, StdArc(j, j, -log(probs_map(0, i, j)), new_state));
+					}
+					nn_fst.AddState();
+					new_state++;
+				}
 			}
 		}
-		fprintf(stderr, "%s", (first_space ? "\t" : " "));
-		first_space = false;
-		fprintf(stderr, "%s", _i2p.find((int)phonemes_map(0, i))->second.c_str());
+		int diff = (int)outputs[0].dim_size(2);
+		for (int k = 0; k < (int)outputs[0].dim_size(2); k++) {
+			nn_fst.AddArc(new_state - diff + k, StdArc(diff - 1, diff - 1, 0.0, new_state));
+		}
+		nn_fst.AddState();
+		nn_fst.SetFinal(new_state, 0.0);
+
+		StdVectorFst result;
+		ShortestPath(nn_fst, &result);
+		result.Write("tmp.fst");
 	}
-	fprintf(stderr, "\n");
 }

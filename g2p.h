@@ -20,6 +20,9 @@ private:
 	char _nn_model_type[64];
 	std::map<std::string, int> _g2i;
 	std::map<int, std::string> _i2p;
+
+	bool _best_nn_hyp = true;
+	bool _nn_lattice = true;
 };
 
 
