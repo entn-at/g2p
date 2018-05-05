@@ -8,7 +8,7 @@
 
 int main(int argc, char **argv) {
 
-	G2P *g2p = new G2P(argv[1], argv[2]);
+	G2P *g2p = new G2P(argv[1], argv[2], argv[3]);
 
 	char word[MAX_WORD_LEN];
 	while (fgets(word, MAX_WORD_LEN, stdin)) {

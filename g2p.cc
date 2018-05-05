@@ -51,7 +51,7 @@ read_nn_meta(const char *path, char *model_type, std::map<string, int> *g2i,
 	}
 }
 
-G2P::G2P(const char *nn_path, const char *nn_meta)
+G2P::G2P(const char *nn_path, const char *nn_meta, const char *fst_path)
 {
 	/* Load the model */
 	Status status = NewSession(SessionOptions(), &_session);
@@ -72,6 +72,8 @@ G2P::G2P(const char *nn_path, const char *nn_meta)
 	}
 
 	read_nn_meta(nn_meta, _nn_model_type, &_g2i, &_i2p);
+
+	_fst_decoder = new PhonetisaurusScript(string(fst_path), "");
 }
 
 G2P::~G2P()
@@ -152,16 +154,22 @@ G2P::Phonetisize(const char *instr)
 		StdVectorFst nn_fst;
 		nn_fst.AddState();
 		nn_fst.SetStart(0);
+		int prev_most_probable = -1;
 		for (int i = 0; i < (int)outputs[0].dim_size(1); i++) {
+			/* Collapse same phonemes in raw for CTC output */
 			float max_prob = 0.0;
-			int probable_phone = -1;
-			for (int j = 0; j < (int)outputs[0].dim_size(2); j++) { 
+			int most_probable = -1;
+			for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
 				if (probs_map(0, i, j) > max_prob) {
 					max_prob = probs_map(0, i, j);
-					probable_phone = j;
+					most_probable = j;
 				}
 			}
-			fprintf(stderr, "at position %d, most probable %d with prob %f\n", i, probable_phone, max_prob);
+			if (prev_most_probable == most_probable) {
+				continue;
+			}
+			prev_most_probable = most_probable;
+
 			int layer_start = new_state;
 			for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
 				if (i == 0) {
@@ -185,8 +193,8 @@ G2P::Phonetisize(const char *instr)
 		nn_fst.AddState();
 		nn_fst.SetFinal(new_state, 0.0);
 
-		StdVectorFst result;
-		ShortestPath(nn_fst, &result);
-		result.Write("tmp.fst");
+		//StdVectorFst result;
+		//ShortestPath(nn_fst, &result);
+		//result.Write("tmp.fst");
 	}
 }

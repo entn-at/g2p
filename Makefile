@@ -7,6 +7,8 @@ all:
 		-I$(TFMAKEFILE_DIR)/downloads/eigen \
 		-I$(TFMAKEFILE_DIR)/gen/protobuf-host/include \
 		-I./phonetisaurus/local/include/ \
+		-I./phonetisaurus/src/3rdparty/utfcpp \
+		-I./phonetisaurus/src/ \
 		-L./tensorflow/bazel-bin/tensorflow \
 		-L./phonetisaurus/local/lib \
 		-Wl,--allow-multiple-definition -Wl,--whole-archive \

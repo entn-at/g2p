@@ -6,10 +6,12 @@
 
 #include "tensorflow/core/public/session.h"
 
+#include "include/PhonetisaurusScript.h"
+
 class G2P {
 
 public:
-	G2P(const char *nn_path, const char *nn_meta);
+	G2P(const char *nn_path, const char *nn_meta, const char *fst_path);
 	~G2P();
 
 	void Phonetisize(const char *instr);
@@ -20,6 +22,8 @@ private:
 	char _nn_model_type[64];
 	std::map<std::string, int> _g2i;
 	std::map<int, std::string> _i2p;
+
+	PhonetisaurusScript *_fst_decoder;
 
 	bool _best_nn_hyp = true;
 	bool _nn_lattice = true;
