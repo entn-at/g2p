@@ -22,6 +22,7 @@ make install
 popd
 
 export LD_LIBRARY_PATH=$PWD/local/lib:$LD_LIBRARY_PATH
+patch -p1 < ../fst/phonetisaurus_patch.patch
 ./configure --with-openfst-libs=$PWD/local/lib \
 	--with-openfst-includes=$PWD/local/include \
 	--enable-python --prefix=$PWD/local/

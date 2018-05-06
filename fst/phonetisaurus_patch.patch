@@ -1,0 +1,28 @@
+diff --git a/src/include/PhonetisaurusScript.h b/src/include/PhonetisaurusScript.h
+index 445086f..f7a9bba 100644
+--- a/src/include/PhonetisaurusScript.h
++++ b/src/include/PhonetisaurusScript.h
+@@ -115,6 +115,23 @@ class PhonetisaurusScript {
+     veto_set_.insert (2);
+   }
+ 
++  VectorFst<StdArc>* GetLattice (const string& word) {
++    VectorFst<StdArc>* fst = new VectorFst<StdArc> ();
++    vector<int> entry = tokenize2ints (
++                          const_cast<string*> (&word),
++                          &delim_, isyms_
++                        );
++    Entry2FSA (entry, fst, imax_, invimap_);
++
++    fst->SetInputSymbols (isyms_);
++    fst->SetOutputSymbols (isyms_);
++
++    VectorFst<StdArc>* ifst = new VectorFst<StdArc>();
++    Compose(*fst, model_, ifst);
++    delete fst;
++    return ifst;
++  }
++
+   // The actual phoneticizer routine
+   vector<PathData> Phoneticize (const string& word, int nbest = 1,
+                       int beam = 10000, float threshold = 99,
