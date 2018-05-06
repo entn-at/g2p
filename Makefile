@@ -3,6 +3,7 @@ TFMAKEFILE_DIR=./tensorflow/tensorflow/contrib/makefile
 
 all:
 	gcc -O3 --std=c++11 g2p_app.cc g2p.cc \
+		./phonetisaurus/local/lib/python2.7/site-packages/Phonetisaurus.a \
 		-I. -I./tensorflow/bazel-tensorflow/ -I./tensorflow/bazel-genfiles/ \
 		-I$(TFMAKEFILE_DIR)/downloads/eigen \
 		-I$(TFMAKEFILE_DIR)/gen/protobuf-host/include \

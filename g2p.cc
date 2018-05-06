@@ -157,7 +157,7 @@ G2P::Phonetisize(const char *instr)
 		int prev_most_probable = -1;
 		for (int i = 0; i < (int)outputs[0].dim_size(1); i++) {
 			/* Collapse same phonemes in raw for CTC output */
-			float max_prob = 0.0;
+			/*float max_prob = 0.0;
 			int most_probable = -1;
 			for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
 				if (probs_map(0, i, j) > max_prob) {
@@ -168,18 +168,25 @@ G2P::Phonetisize(const char *instr)
 			if (prev_most_probable == most_probable) {
 				continue;
 			}
-			prev_most_probable = most_probable;
+			prev_most_probable = most_probable;*/
 
 			int layer_start = new_state;
 			for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
+				string olabel = "";
+				if (j >= _i2p.size()) {
+					olabel = "<eps>";
+				} else {
+					olabel =  _i2p.find(j)->second;
+				}
+				int olabeli = _fst_decoder->FindOsym(olabel);
 				if (i == 0) {
-					nn_fst.AddArc(0, StdArc(j, j, -log(probs_map(0, i, j)), new_state));
+					nn_fst.AddArc(0, StdArc(olabeli, olabeli, -log(probs_map(0, i, j)), new_state));
 					nn_fst.AddState();
 					new_state++;
 				} else {
 					int diff = (int)outputs[0].dim_size(2);
 					for (int k = 0; k < (int)outputs[0].dim_size(2); k++) {
-						nn_fst.AddArc(layer_start - diff + k, StdArc(j, j, -log(probs_map(0, i, j)), new_state));
+						nn_fst.AddArc(layer_start - diff + k, StdArc(olabeli, olabeli, -log(probs_map(0, i, j)), new_state));
 					}
 					nn_fst.AddState();
 					new_state++;
@@ -187,14 +194,27 @@ G2P::Phonetisize(const char *instr)
 			}
 		}
 		int diff = (int)outputs[0].dim_size(2);
+		int olabeli = _fst_decoder->FindOsym(string("<eps>"));
 		for (int k = 0; k < (int)outputs[0].dim_size(2); k++) {
-			nn_fst.AddArc(new_state - diff + k, StdArc(diff - 1, diff - 1, 0.0, new_state));
+			nn_fst.AddArc(new_state - diff + k, StdArc(olabeli, olabeli, 0.0, new_state));
 		}
 		nn_fst.AddState();
 		nn_fst.SetFinal(new_state, 0.0);
+		nn_fst.SetInputSymbols(_fst_decoder->osyms_);
+		nn_fst.SetOutputSymbols(_fst_decoder->osyms_);
+		ArcSort(&nn_fst, OLabelCompare<StdArc>());
 
-		//StdVectorFst result;
-		//ShortestPath(nn_fst, &result);
-		//result.Write("tmp.fst");
+		VectorFst<StdArc>* fst = _fst_decoder->GetLattice(string(instr));
+		Project(fst, ProjectType::PROJECT_OUTPUT);
+
+		VectorFst<StdArc>* res_fst = new VectorFst<StdArc>();
+		Intersect(nn_fst, *fst, res_fst);
+
+		StdVectorFst result;
+		ShortestPath(*res_fst, &result);
+		result.Write("tmp.fst");
+
+		delete fst;
+		delete res_fst;
 	}
 }
