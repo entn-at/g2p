@@ -10,3 +10,4 @@ Performance on amepd (using split by read_utils) in WER / stressless WER:
 * ctc:  0.3293 / 0.2863
 * attention: 0.3302 / 0.2892
 * transformer: 0.3093 / 0.2715
+* transformer + 8-gram fst: 0.3025 / 0.2588

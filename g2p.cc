@@ -83,7 +83,6 @@ G2P::~G2P()
 void G2P::PrintShortestPath(VectorFst<StdArc> *res_fst, string name) {
 	StdVectorFst result;
 	ShortestPath(*res_fst, &result);
-	result.Write(name + ".fst");
 	vector<string> pron;
 	int prev_label = -999;
 	for (StateIterator<StdFst> siter(result); !siter.Done(); siter.Next()) {
@@ -182,8 +181,8 @@ G2P::Phonetisize(const char *instr)
 		nn_fst.SetStart(0);
 		int prev_most_probable = -1;
 		for (int i = 0; i < (int)outputs[0].dim_size(1); i++) {
-			/* Collapse same phonemes in raw for CTC output */
-			/*float max_prob = 0.0;
+			/* Collapse same phonemes in raw output */
+			float max_prob = 0.0;
 			int most_probable = -1;
 			for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
 				if (probs_map(0, i, j) > max_prob) {
@@ -194,7 +193,7 @@ G2P::Phonetisize(const char *instr)
 			if (prev_most_probable == most_probable) {
 				continue;
 			}
-			prev_most_probable = most_probable;*/
+			prev_most_probable = most_probable;
 
 			int layer_start = new_state;
 			for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
@@ -248,13 +247,15 @@ G2P::Phonetisize(const char *instr)
 		ArcSort(&nn_fst, OLabelCompare<StdArc>());
 
 		VectorFst<StdArc>* fst = _fst_decoder->GetLattice(string(instr));
-
 		StdVectorFst fst_cpy;
 		bool start_state = true;
 		int empty_label = _fst_decoder->FindOsym(string("_"));
 		int last_state = -1;
-		for (StateIterator<StdFst> siter(*fst); !siter.Done(); siter.Next()) {
+		int extra_state = fst->NumStates();
+		for (int i = 0; i < extra_state; i++) {
 			fst_cpy.AddState();
+		}
+		for (StateIterator<StdFst> siter(*fst); !siter.Done(); siter.Next()) {
 			if (start_state) {
 				fst_cpy.SetStart(siter.Value());
 				start_state = false;
@@ -262,17 +263,27 @@ G2P::Phonetisize(const char *instr)
 			last_state = (int)siter.Value();
 			for (ArcIterator<StdFst> aiter(*fst, siter.Value()); !aiter.Done(); aiter.Next()) {
 				const StdArc &arc = aiter.Value();
-				if ((int)arc.olabel == empty_label) {
-					fst_cpy.AddArc(siter.Value(), StdArc(0, 0, arc.weight, arc.nextstate));
+				int label = ((int)arc.olabel == empty_label) ? 0 : arc.olabel;
+				/* Check if need to expand to monophones */
+				string label_str = _fst_decoder->FindOsym(label);
+				int sep_pos = label_str.find("|");
+				if (sep_pos != string::npos) {
+					string phone1 = label_str.substr(0, sep_pos);
+					string phone2 = label_str.substr(sep_pos + 1);
+					int phone1_i = _fst_decoder->FindOsym(phone1);
+					int phone2_i = _fst_decoder->FindOsym(phone2);
+					fst_cpy.AddArc(siter.Value(), StdArc(phone1_i, phone1_i, arc.weight, extra_state));
+					fst_cpy.AddState();
+					fst_cpy.AddArc(extra_state, StdArc(phone2_i, phone2_i, 0.0, arc.nextstate));
+					extra_state++;
 				} else {
-					fst_cpy.AddArc(siter.Value(), StdArc(arc.olabel, arc.olabel, arc.weight, arc.nextstate));
+					fst_cpy.AddArc(siter.Value(), StdArc(label, label, arc.weight, arc.nextstate));
 				}
 			}
-			fst_cpy.SetFinal(last_state, fst->Final(last_state)); 
+			fst_cpy.SetFinal(last_state, fst->Final(last_state));
 		}
 		fst_cpy.SetInputSymbols(_fst_decoder->osyms_);
 		fst_cpy.SetOutputSymbols(_fst_decoder->osyms_);
-
 
 		RmEpsilon(fst);
 		Project(fst, ProjectType::PROJECT_OUTPUT);
@@ -286,9 +297,6 @@ G2P::Phonetisize(const char *instr)
 		Intersect(nn_fst, fst_cpy, res_fst);
 		RmEpsilon(res_fst);
 
-		//PrintShortestPath(fst);
-		PrintShortestPath(&fst_cpy, string("fst"));
-		PrintShortestPath(&nn_fst, string("nn"));
 		PrintShortestPath(res_fst, string("res"));
 
 		delete fst;
