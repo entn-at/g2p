@@ -80,6 +80,32 @@ G2P::~G2P()
 {
 }
 
+void G2P::PrintShortestPath(VectorFst<StdArc> *res_fst, string name) {
+	StdVectorFst result;
+	ShortestPath(*res_fst, &result);
+	result.Write(name + ".fst");
+	vector<string> pron;
+	int prev_label = -999;
+	for (StateIterator<StdFst> siter(result); !siter.Done(); siter.Next()) {
+		for (ArcIterator<StdFst> aiter(result, siter.Value()); !aiter.Done(); aiter.Next()) {
+			int olabel = (int)aiter.Value().olabel;
+			if (prev_label == olabel) {
+				continue;
+			}
+			prev_label = olabel;
+			pron.push_back(_fst_decoder->FindOsym(olabel));
+		}
+	}
+	reverse(pron.begin(), pron.end());
+	for (vector<string>::iterator it = pron.begin(); it != pron.end(); it++) {
+		if (it != pron.begin()) {
+			fprintf(stderr, " ");
+		}
+		fprintf(stderr, "%s", (*it).c_str());
+	}
+	fprintf(stderr, "\n");
+}
+
 void
 G2P::Phonetisize(const char *instr)
 {
@@ -87,7 +113,7 @@ G2P::Phonetisize(const char *instr)
 	if (instr_len == 0) {
 		return;
 	}
-	//fprintf(stderr, "%s", instr);
+	fprintf(stderr, "%s\t", instr);
 	vector<pair<string, Tensor> > inputs;
 	int alloc_len = instr_len;
 	if (strcmp(_nn_model_type, "ctc") == 0) {
@@ -192,6 +218,22 @@ G2P::Phonetisize(const char *instr)
 					new_state++;
 				}
 			}
+
+			if (strcmp(_nn_model_type, "ctc") != 0) {
+				/* for attention and transformer - break when stop symbol is emmited */
+				float max_prob = 0.0;
+				int most_probable = -1;
+				for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
+					if (probs_map(0, i, j) > max_prob) {
+						max_prob = probs_map(0, i, j);
+						most_probable = j;
+					}
+				}
+				if (most_probable >= (int)outputs[0].dim_size(2)) {
+					break;
+				}
+			}
+
 		}
 		int diff = (int)outputs[0].dim_size(2);
 		int olabeli = _fst_decoder->FindOsym(string("<eps>"));
@@ -202,17 +244,52 @@ G2P::Phonetisize(const char *instr)
 		nn_fst.SetFinal(new_state, 0.0);
 		nn_fst.SetInputSymbols(_fst_decoder->osyms_);
 		nn_fst.SetOutputSymbols(_fst_decoder->osyms_);
+		RmEpsilon(&nn_fst);
 		ArcSort(&nn_fst, OLabelCompare<StdArc>());
 
 		VectorFst<StdArc>* fst = _fst_decoder->GetLattice(string(instr));
+
+		StdVectorFst fst_cpy;
+		bool start_state = true;
+		int empty_label = _fst_decoder->FindOsym(string("_"));
+		int last_state = -1;
+		for (StateIterator<StdFst> siter(*fst); !siter.Done(); siter.Next()) {
+			fst_cpy.AddState();
+			if (start_state) {
+				fst_cpy.SetStart(siter.Value());
+				start_state = false;
+			}
+			last_state = (int)siter.Value();
+			for (ArcIterator<StdFst> aiter(*fst, siter.Value()); !aiter.Done(); aiter.Next()) {
+				const StdArc &arc = aiter.Value();
+				if ((int)arc.olabel == empty_label) {
+					fst_cpy.AddArc(siter.Value(), StdArc(0, 0, arc.weight, arc.nextstate));
+				} else {
+					fst_cpy.AddArc(siter.Value(), StdArc(arc.olabel, arc.olabel, arc.weight, arc.nextstate));
+				}
+			}
+			fst_cpy.SetFinal(last_state, fst->Final(last_state)); 
+		}
+		fst_cpy.SetInputSymbols(_fst_decoder->osyms_);
+		fst_cpy.SetOutputSymbols(_fst_decoder->osyms_);
+
+
+		RmEpsilon(fst);
 		Project(fst, ProjectType::PROJECT_OUTPUT);
+		ArcSort(fst, OLabelCompare<StdArc>());
+
+		RmEpsilon(&fst_cpy);
+		Project(&fst_cpy, ProjectType::PROJECT_OUTPUT);
+		ArcSort(&fst_cpy, OLabelCompare<StdArc>());
 
 		VectorFst<StdArc>* res_fst = new VectorFst<StdArc>();
-		Intersect(nn_fst, *fst, res_fst);
+		Intersect(nn_fst, fst_cpy, res_fst);
+		RmEpsilon(res_fst);
 
-		StdVectorFst result;
-		ShortestPath(*res_fst, &result);
-		result.Write("tmp.fst");
+		//PrintShortestPath(fst);
+		PrintShortestPath(&fst_cpy, string("fst"));
+		PrintShortestPath(&nn_fst, string("nn"));
+		PrintShortestPath(res_fst, string("res"));
 
 		delete fst;
 		delete res_fst;

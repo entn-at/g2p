@@ -25,8 +25,10 @@ private:
 
 	PhonetisaurusScript *_fst_decoder;
 
-	bool _best_nn_hyp = true;
+	bool _best_nn_hyp = false;
 	bool _nn_lattice = true;
+
+	void PrintShortestPath(VectorFst<StdArc> *res_fst, std::string name);
 };
 
 
