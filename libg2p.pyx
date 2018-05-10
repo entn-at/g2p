@@ -1,10 +1,11 @@
 
 from libcpp.string cimport string
+from libcpp.vector cimport vector
 
 cdef extern from "g2p.h":
     cdef cppclass G2P:
         G2P(string, string, string)
-        void Phonetisize(string)
+        vector[string]& Phonetisize(string)
 
 cdef class PyG2P:
     cdef G2P *thisptr
@@ -17,4 +18,4 @@ cdef class PyG2P:
         del self.thisptr
     def Phonetisize(self, word):
         cdef string word_c = word.encode()
-        self.thisptr.Phonetisize(word_c)
+        return self.thisptr.Phonetisize(word_c)

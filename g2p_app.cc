@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <string>
+#include <vector>
 
 #include "g2p.h"
 
@@ -16,7 +17,14 @@ int main(int argc, char **argv) {
 	char word[MAX_WORD_LEN];
 	while (fgets(word, MAX_WORD_LEN, stdin)) {
 		char *trimmed_word = strtok(word, "\n");
-		g2p->Phonetisize(string(trimmed_word));
+		vector<string> pron = g2p->Phonetisize(string(trimmed_word));
+		fprintf(stderr, "%s\t", trimmed_word);
+		for (vector<string>::iterator it = pron.begin(); it != pron.end(); it++) {
+			if (it != pron.begin()) {
+				fprintf(stderr, " ");
+			}
+			fprintf(stderr, "%s", (*it).c_str());
+		}
+		fprintf(stderr, "\n");
 	}
-
 }
