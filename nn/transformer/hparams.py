@@ -9,6 +9,8 @@ hparams = tf.contrib.training.HParams(
     max_grapheme_seq_len=35,
     max_phoneme_seq_len=35,
 
+    nbest=10,
+
     hidden_units=512,
     dropout_rate=0.1,
     encoder_blocks=6,

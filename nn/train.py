@@ -21,7 +21,8 @@ def parse_args():
     arg_parser.add_argument('--hparams', default='', help='Overwrites hparams')
     arg_parser.add_argument('--restore', type=int,
                             help='Step to restore if any')
-    arg_parser.add_argument('--model-type', choices=('ctc', 'attention', 'transformer'),
+    arg_parser.add_argument('--model-type',
+                            choices=('ctc', 'attention', 'transformer', 'transformer_ctc'),
                             default='ctc', help='What kind of model to train')
 
     args = arg_parser.parse_args()

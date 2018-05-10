@@ -15,6 +15,9 @@ def import_model_type(model_type):
     elif model_type == 'transformer':
         from nn.transformer.hparams import hparams
         from nn.transformer.model import G2PModel
+    elif model_type == 'transformer_ctc':
+        from nn.transformer.hparams import hparams
+        from nn.transformer.model_ctc import G2PModel
     return G2PModel, hparams
 
 

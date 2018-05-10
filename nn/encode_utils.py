@@ -163,11 +163,13 @@ def group_batch_pad_attention(d, grapheme_pad, phoneme_start, phoneme_pad,
 
 
 def group_batch_pad(d, g2i, p2i, group_size, batch_size, pad_type):
-    if pad_type == 'ctc':
+    if pad_type.endswith('ctc'):
         return group_batch_pad_ctc(d, len(g2i), group_size, batch_size)
     elif pad_type == 'attention' or pad_type == 'transformer':
         return group_batch_pad_attention(d, len(g2i), len(p2i), len(p2i) + 1,
                                          group_size, batch_size)
+    else:
+        raise RuntimeError('**Error! Unexpected pad type %s' % pad_type)
 
 
 def decode_pron(i2p, pron, is_sparse=True, with_stop_symbol=False):

@@ -5,6 +5,94 @@ from nn.modules import *
 from nn.transformer.specific_modules import *
 
 
+def encoder(inputs, hparams, is_training=False, reuse=False):
+    with tf.variable_scope('encoder', reuse=reuse):
+        ## Embedding
+        enc = embedding(inputs, vocab_size=hparams.graphemes_num,
+                        num_units=hparams.hidden_units,
+                        scale=True,
+                        scope="enc_embed")
+        if hparams.positional_encoding:
+            enc += positional_encoding(inputs, 
+                                       vocab_size=hparams.max_grapheme_seq_len,
+                                       num_units=hparams.hidden_units,
+                                       scale=False,
+                                       scope="enc_pe")
+
+        enc = tf.layers.dropout(enc, rate=hparams.dropout_rate,
+                                training=tf.convert_to_tensor(is_training))
+
+        for i in range(hparams.encoder_blocks):
+            with tf.variable_scope("num_blocks_{}".format(i)):
+                ### Multihead Attention
+                enc = multihead_attention(queries=enc, keys=enc,
+                                          num_units=hparams.hidden_units,
+                                          num_heads=hparams.heads_num,
+                                          dropout_rate=hparams.dropout_rate,
+                                          is_training=is_training,
+                                          causality=False, reuse=reuse)
+
+                ### Feed Forward
+                enc = feedforward(enc, num_units=[4 * hparams.hidden_units,
+                                  hparams.hidden_units], reuse=reuse)
+        return enc
+
+
+def decoder(enc, decoder_inputs, hparams, is_training=False, reuse=False,
+            embed_input=True):
+    with tf.variable_scope('decoder', reuse=reuse):
+        if embed_input:
+            ## Embedding
+            dec = embedding(decoder_inputs,
+                            vocab_size=hparams.phonemes_num,
+                            num_units=hparams.hidden_units,
+                            scale=True,
+                            scope="dec_embed")
+        else:
+            dec = decoder_inputs
+
+        if hparams.positional_encoding:
+            dec += positional_encoding(decoder_inputs,
+                                       vocab_size=hparams.max_phoneme_seq_len,
+                                       num_units=hparams.hidden_units,
+                                       scale=False,
+                                       scope="dec_pe")
+
+        ## Dropout
+        dec = tf.layers.dropout(dec, rate=hparams.dropout_rate,
+                                training=tf.convert_to_tensor(is_training))
+
+        for i in range(hparams.decoder_blocks):
+            with tf.variable_scope("num_blocks_{}".format(i)):
+                ## Multihead Attention ( self-attention)
+                dec = multihead_attention(queries=dec,
+                                          keys=dec,
+                                          num_units=hparams.hidden_units,
+                                          num_heads=hparams.heads_num,
+                                          dropout_rate=hparams.dropout_rate,
+                                          is_training=is_training,
+                                          causality=True,
+                                          scope="self_attention", reuse=reuse)
+
+                ## Multihead Attention ( vanilla attention)
+                dec = multihead_attention(queries=dec,
+                                          keys=enc,
+                                          num_units=hparams.hidden_units,
+                                          num_heads=hparams.heads_num,
+                                          dropout_rate=hparams.dropout_rate,
+                                          is_training=is_training,
+                                          causality=False,
+                                          scope="vanilla_attention", reuse=reuse)
+
+                ## Feed Forward
+                dec = feedforward(dec, num_units=[4 * hparams.hidden_units,
+                                                  hparams.hidden_units], reuse=reuse)
+
+        # Project
+        dec = tf.layers.dense(dec, hparams.phonemes_num)
+        return dec
+
+
 class G2PModel:
     def __init__(self, hparams, is_training=False, with_target=True, reuse=False):
         self.with_target = with_target
@@ -17,44 +105,12 @@ class G2PModel:
             self.target_lengths = tf.placeholder(tf.int32, [None], name='phoneme_seq_len_ph')
 
         with tf.variable_scope('g2p', reuse=reuse):
-            with tf.variable_scope("encoder"):
-                ## Embedding
-                self.enc = embedding(self.inputs,
-                                      vocab_size=self.hparams.graphemes_num,
-                                      num_units=self.hparams.hidden_units,
-                                      scale=True,
-                                      scope="enc_embed")
-                if self.hparams.positional_encoding:
-                    self.enc += positional_encoding(self.inputs,
-                                                    vocab_size=self.hparams.max_grapheme_seq_len,
-                                                    num_units=self.hparams.hidden_units,
-                                                    scale=False,
-                                                    scope="enc_pe")
-
-                self.enc = tf.layers.dropout(self.enc,
-                                             rate=hparams.dropout_rate,
-                                             training=tf.convert_to_tensor(
-                                                 is_training))
-
-                for i in range(self.hparams.encoder_blocks):
-                    with tf.variable_scope("num_blocks_{}".format(i)):
-                        ### Multihead Attention
-                        self.enc = multihead_attention(queries=self.enc,
-                                                       keys=self.enc,
-                                                       num_units=self.hparams.hidden_units,
-                                                       num_heads=self.hparams.heads_num,
-                                                       dropout_rate=self.hparams.dropout_rate,
-                                                       is_training=is_training,
-                                                       causality=False, reuse=reuse)
-
-                        ### Feed Forward
-                        self.enc = feedforward(self.enc,
-                                               num_units=[4 * self.hparams.hidden_units,
-                                                          self.hparams.hidden_units], reuse=reuse)
+            self.enc = encoder(self.inputs, self.hparams, is_training=is_training, reuse=reuse)
 
             if is_training:
                 decoder_inputs = self.targets[:, :-1]
-                self.logits = self.decoder(decoder_inputs, reuse=reuse)
+                self.logits = decoder(self.enc, decoder_inputs, self.hparams,
+                                      is_training=is_training, reuse=reuse)
                 self.decoded_best = tf.to_int32(tf.arg_max(self.logits, dimension=-1))
             else:
                 batch_size = tf.shape(self.inputs)[0]
@@ -67,7 +123,8 @@ class G2PModel:
                 condition = lambda i, inpts: i <  tf.reduce_max(self.input_lengths) + 3
 
                 def body(i, inpts):
-                    otpts = self.decoder(tf.to_int32(tf.arg_max(inpts, dimension=-1)), reuse=reuse)
+                    otpts = decoder(self.enc, tf.to_int32(tf.arg_max(inpts, dimension=-1)),
+                                    self.hparams, is_training=False, reuse=reuse)
                     inpts = tf.concat([inpts, otpts[:, -1:, :]], 1)
                     return i+1, inpts
 
@@ -76,56 +133,6 @@ class G2PModel:
                 self.decoded_best = tf.identity(tf.to_int32(tf.arg_max(dec[:, 1:], dimension=-1)),
                                                 name='predicted_1best')
                 self.probs = tf.nn.softmax(dec, name='probs')
-
-    def decoder(self, decoder_inputs, reuse=False):
-        with tf.variable_scope('decoder', reuse=reuse):
-            ## Embedding
-            dec = embedding(decoder_inputs,
-                            vocab_size=self.hparams.phonemes_num,
-                            num_units=self.hparams.hidden_units,
-                            scale=True,
-                            scope="dec_embed")
-
-            if self.hparams.positional_encoding:
-                dec += positional_encoding(decoder_inputs,
-                                           vocab_size=self.hparams.max_phoneme_seq_len,
-                                           num_units=self.hparams.hidden_units,
-                                           scale=False,
-                                           scope="dec_pe")
-
-            ## Dropout
-            dec = tf.layers.dropout(dec, rate=self.hparams.dropout_rate,
-                                    training=tf.convert_to_tensor(self.is_training))
-
-            for i in range(self.hparams.decoder_blocks):
-                with tf.variable_scope("num_blocks_{}".format(i)):
-                    ## Multihead Attention ( self-attention)
-                    dec = multihead_attention(queries=dec,
-                                              keys=dec,
-                                              num_units=self.hparams.hidden_units,
-                                              num_heads=self.hparams.heads_num,
-                                              dropout_rate=self.hparams.dropout_rate,
-                                              is_training=self.is_training,
-                                              causality=True,
-                                              scope="self_attention", reuse=reuse)
-
-                    ## Multihead Attention ( vanilla attention)
-                    dec = multihead_attention(queries=dec,
-                                                   keys=self.enc,
-                                                   num_units=self.hparams.hidden_units,
-                                                   num_heads=self.hparams.heads_num,
-                                                   dropout_rate=self.hparams.dropout_rate,
-                                                   is_training=self.is_training,
-                                                   causality=False,
-                                                   scope="vanilla_attention", reuse=reuse)
-
-                    ## Feed Forward
-                    dec = feedforward(dec, num_units=[4 * self.hparams.hidden_units,
-                                                      self.hparams.hidden_units], reuse=reuse)
-
-                    # Project
-                    dec = tf.layers.dense(dec, self.hparams.phonemes_num)
-                    return dec
 
     def add_loss(self):
         decoder_targets = self.targets[:, 1:]
