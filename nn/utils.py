@@ -30,11 +30,11 @@ def compute_wer(sess, model, batched_dict, i2p, model_type):
         output = sess.run(model.decoded_best,
                           feed_dict=model.create_feed_dict(batch))
         orig = decode_pron(i2p, batch[2],
-                           is_sparse=model_type == 'ctc',
-                           with_stop_symbol=model_type != 'ctc')
+                           is_sparse=model_type.endswith('ctc'),
+                           with_stop_symbol=(not model_type.endswith('ctc')))
         predicted = decode_pron(i2p, output,
                                 is_sparse=False,
-                                with_stop_symbol=model_type != 'ctc')
+                                with_stop_symbol=(not model_type.endswith('ctc')))
 
         words_num += len(orig)
         for o, p in zip(orig, predicted):
