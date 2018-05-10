@@ -18,4 +18,5 @@ cdef class PyG2P:
         del self.thisptr
     def Phonetisize(self, word):
         cdef string word_c = word.encode()
-        return self.thisptr.Phonetisize(word_c)
+        res = self.thisptr.Phonetisize(word_c)
+        return [x.decode('utf-8') for x in res]
