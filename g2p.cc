@@ -3,11 +3,12 @@
 #include <vector>
 #include <cstdint>
 #include <cmath>
+#include <map>
 
 #include "tensorflow/core/graph/graph_def_builder.h"
 #include "tensorflow/core/public/session.h"
 #include "tensorflow/core/platform/env.h"
-
+#include "include/PhonetisaurusScript.h"
 #include "fst/fstlib.h"
 
 #include "g2p.h"
@@ -17,11 +18,11 @@ using namespace fst;
 using namespace tensorflow;
 
 static void
-read_nn_meta(const char *path, char *model_type, std::map<string, int> *g2i,
+read_nn_meta(string path, char *model_type, std::map<string, int> *g2i,
 		std::map<int, string> *i2p)
 {
 	char line[1024];
-	FILE *fp = fopen(path, "r");
+	FILE *fp = fopen(path.c_str(), "r");
 
 	if (!fgets(line, 1024, fp)) {
 		fprintf(stderr, "**Error! Failed to read model type\n");
@@ -51,15 +52,45 @@ read_nn_meta(const char *path, char *model_type, std::map<string, int> *g2i,
 	}
 }
 
-G2P::G2P(const char *nn_path, const char *nn_meta, const char *fst_path)
-{
+class G2P::Impl {
+public:
+	Impl(string nn_path, string nn_meta, string fst_path);
+	~Impl();
+	void Phonetisize(string instr);
+private:
+	tensorflow::Session* _session;
+	tensorflow::GraphDef _graph_def;
+	char _nn_model_type[64];
+	std::map<std::string, int> _g2i;
+	std::map<int, std::string> _i2p;
+
+	PhonetisaurusScript *_fst_decoder;
+
+	bool _best_nn_hyp = false;
+	bool _nn_lattice = true;
+
+	void PrintShortestPath(VectorFst<StdArc> *res_fst, std::string name);
+};
+
+G2P::G2P(string nn_path, string nn_meta, string fst_path)
+: pimpl(new Impl(nn_path, nn_meta, fst_path)) {}
+
+G2P::~G2P() {
+	delete pimpl;
+}
+
+void G2P::Phonetisize(string instr) {
+	pimpl->Phonetisize(instr);
+}
+
+G2P::Impl::Impl(string nn_path, string nn_meta, string fst_path) {
 	/* Load the model */
 	Status status = NewSession(SessionOptions(), &_session);
 	if (!status.ok()) {
 		fprintf(stderr, "**Error! Failed to create new session\n");
 		exit(1);
 	}
-	status = ReadBinaryProto(tensorflow::Env::Default(), string(nn_path), &_graph_def);
+	status = ReadBinaryProto(tensorflow::Env::Default(), nn_path, &_graph_def);
 	if (!status.ok()) {
 		fprintf(stderr, "**Error! Failed to read graph\n");
 		exit(1);
@@ -73,14 +104,14 @@ G2P::G2P(const char *nn_path, const char *nn_meta, const char *fst_path)
 
 	read_nn_meta(nn_meta, _nn_model_type, &_g2i, &_i2p);
 
-	_fst_decoder = new PhonetisaurusScript(string(fst_path), "");
+	_fst_decoder = new PhonetisaurusScript(fst_path, "");
 }
 
-G2P::~G2P()
+G2P::Impl::~Impl()
 {
 }
 
-void G2P::PrintShortestPath(VectorFst<StdArc> *res_fst, string name) {
+void G2P::Impl::PrintShortestPath(VectorFst<StdArc> *res_fst, string name) {
 	StdVectorFst result;
 	ShortestPath(*res_fst, &result);
 	vector<string> pron;
@@ -106,13 +137,13 @@ void G2P::PrintShortestPath(VectorFst<StdArc> *res_fst, string name) {
 }
 
 void
-G2P::Phonetisize(const char *instr)
+G2P::Impl::Phonetisize(string instr)
 {
-	int instr_len = strlen(instr);
+	int instr_len = instr.length();
 	if (instr_len == 0) {
 		return;
 	}
-	fprintf(stderr, "%s\t", instr);
+	fprintf(stderr, "%s\t", instr.c_str());
 	vector<pair<string, Tensor> > inputs;
 	int alloc_len = instr_len;
 	if (strcmp(_nn_model_type, "ctc") == 0) {
@@ -246,7 +277,7 @@ G2P::Phonetisize(const char *instr)
 		RmEpsilon(&nn_fst);
 		ArcSort(&nn_fst, OLabelCompare<StdArc>());
 
-		VectorFst<StdArc>* fst = _fst_decoder->GetLattice(string(instr));
+		VectorFst<StdArc>* fst = _fst_decoder->GetLattice(instr);
 		StdVectorFst fst_cpy;
 		bool start_state = true;
 		int empty_label = _fst_decoder->FindOsym(string("_"));
