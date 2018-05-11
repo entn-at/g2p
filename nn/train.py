@@ -62,14 +62,14 @@ def main():
     with open('%s/hparams' % args.model_dir, 'w') as outfp:
         json.dump(hparams.to_json(), outfp)
 
-    d = read_cmudict(args.train)
+    d = read_dict(args.train)
     g2i = get_graphemes_map(d)
     p2i = get_phonemes_map(d)
     write_meta(args.model_type, g2i, p2i, '%s/meta' % args.model_dir)
 
     traind = encode_dict(d, g2i, p2i)
     if args.dev:
-        d = read_cmudict(args.dev)
+        d = read_dict(args.dev)
         devd = encode_dict(d, g2i, p2i)
 
     print('**Info: training inputs read. There are %d graphemes and %d phonemes' %

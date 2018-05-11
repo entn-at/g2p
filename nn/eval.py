@@ -38,7 +38,7 @@ def main():
     with open('%s/hparams' % args.model_dir, 'r') as infp:
         loaded = json.load(infp)
         hparams.parse_json(loaded)
-    d = read_cmudict(args.dict)
+    d = read_dict(args.dict)
     d = encode_dict(d, g2i, p2i)
     i2p = {v: k for k, v in p2i.items()}
     model = G2PModel(hparams, is_training=False, with_target=True, reuse=False)
