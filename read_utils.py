@@ -45,7 +45,7 @@ def filter_short_words(d, word_len=1):
     return d_filt
 
 
-def filter_rare_graphemes(d, threshold=100):
+def filter_rare_graphemes(d, threshold=1000):
     freq = {}
     for w, _ in d:
         for c in w:
@@ -67,7 +67,7 @@ def filter_rare_graphemes(d, threshold=100):
                 to_add = False
                 break
         if to_add:
-            d_filt[w] = p
+            d_filt.append((w, p))
 
     return d_filt
 
@@ -77,7 +77,7 @@ def filter_word_idx(d):
     for w, p in d:
         if '(' in w:
             w = w.split('(')[0]
-        d_filt[w] = p
+        d_filt.append((w, p))
     return d_filt
 
 
