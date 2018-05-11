@@ -25,7 +25,7 @@ def main():
     args = parse_args()
     eval_start = time.time()
     model = phonetisaurus.Phonetisaurus(args.model)
-    d = read_cmudict(args.dict)
+    d = read_dict(args.dict)
     wer = 0.0
     stressless_wer = 0.0
     for word, pron in d:
