@@ -90,6 +90,18 @@ def fix_case(d):
     return d_fixed
 
 
+def drop_stress(phonemes):
+    return [x.rstrip(string.digits) for x in phonemes]
+
+
+def filter_stress(d):
+    d_filt = []
+    for w, p in d:
+        p = drop_stress(p)
+        d_filt.append((w, p))
+    return d_filt
+
+
 def split_train_dev_test(path, train_path, dev_path, test_path, dev_every_nth=20,
                          test_every_nth=10):
     d = read_dict(path)
