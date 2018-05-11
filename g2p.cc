@@ -239,22 +239,7 @@ G2P::Impl::PhonetisizeIntersect(string instr) {
 	StdVectorFst nn_fst;
 	nn_fst.AddState();
 	nn_fst.SetStart(0);
-	int prev_most_probable = -1;
 	for (int i = 0; i < (int)outputs[0].dim_size(1); i++) {
-		/* Collapse same phonemes in raw output */
-		float max_prob = 0.0;
-		int most_probable = -1;
-		for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
-			if (probs_map(0, i, j) > max_prob) {
-				max_prob = probs_map(0, i, j);
-				most_probable = j;
-			}
-		}
-		if (prev_most_probable == most_probable) {
-			continue;
-		}
-		prev_most_probable = most_probable;
-
 		int layer_start = new_state;
 		for (int j = 0; j < (int)outputs[0].dim_size(2); j++) {
 			string olabel = "";
