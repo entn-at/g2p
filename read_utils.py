@@ -14,6 +14,8 @@ def read_dict(path):
             # drop inline comments (as in amepd)
             if '#' in line:
                 line = line.split('#')[0].rstrip()
+                if not line:
+                    continue
             parts = line.split()
             word = parts[0]
             pron = parts[1:]
