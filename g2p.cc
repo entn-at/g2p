@@ -147,6 +147,8 @@ G2P::Impl::PrepareNNInput(string instr) {
 	int alloc_len = instr_len;
 	if (strcmp(_nn_model_type, "ctc") == 0) {
 		alloc_len += 3;
+	} else {
+		alloc_len += 1;
 	}
 	Tensor input(DT_INT32, TensorShape({1, alloc_len}));
 	auto input_map = input.tensor<int, 2>();
@@ -157,10 +159,8 @@ G2P::Impl::PrepareNNInput(string instr) {
 		grapheme[0] = instr[i];
 		input_map(0, i) = _g2i.find(string(grapheme))->second;
 	}
-	if (strcmp(_nn_model_type, "ctc") == 0) {
-		input_map(0, instr_len) = _g2i.size();
-		input_map(0, instr_len + 1) = _g2i.size();
-		input_map(0, instr_len + 2) = _g2i.size();
+	for (int i = 0; i < alloc_len - instr_len; i++) {
+		input_map(0, instr_len + i) = _g2i.size();
 	}
 	inputs.push_back(std::make_pair("graphemes_ph", input));
 	tensorflow::Tensor slen_input(tensorflow::DT_INT32, tensorflow::TensorShape({1}));

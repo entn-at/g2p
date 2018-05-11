@@ -3,7 +3,7 @@ import tensorflow as tf
 
 hparams = tf.contrib.training.HParams(
 
-    graphemes_num=29,
+    graphemes_num=28,
     phonemes_num=73,
 
     max_grapheme_seq_len=35,
@@ -12,10 +12,10 @@ hparams = tf.contrib.training.HParams(
     nbest=10,
 
     hidden_units=512,
-    dropout_rate=0.1,
-    encoder_blocks=6,
-    decoder_blocks=6,
-    heads_num=8,
+    dropout_rate=0.3,
+    encoder_blocks=3,
+    decoder_blocks=3,
+    heads_num=4,
     label_smoothing=True,
     positional_encoding=True,
 

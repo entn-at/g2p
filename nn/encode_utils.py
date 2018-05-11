@@ -124,7 +124,7 @@ def _preprocess_attention_batch(batch, grapheme_pad, phoneme_start, phoneme_pad)
 
     prons = [np.pad(p, (1, 0), 'constant', constant_values=phoneme_start) for p in prons]
 
-    max_word_len = max(words_len)
+    max_word_len = max(words_len) + 1
     max_pron_len = max(prons_len) + 1
 
     words = np.stack([pad_arr_to(x, grapheme_pad, max_word_len) for x in words])
