@@ -37,8 +37,11 @@ def main():
 
         if not word:
             break
-
-        print('%s\t%s' % (word, ' '.join(g2p.Phonetisize(word))))
+        pron = g2p.Phonetisize(word)
+        if not pron:
+            print('**Error! Invalid input')
+        else:
+            print('%s\t%s' % (word, ' '.join(pron)))
 
 
 if __name__ == '__main__':

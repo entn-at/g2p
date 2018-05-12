@@ -64,7 +64,11 @@ class PhonetisizeResource:
   def on_get(self, req, res):
     if not req.params.get('text'):
       raise falcon.HTTPBadRequest()
-    res.body = ' '.join(g2p.Phonetisize(req.params.get('text')))
+    pron = g2p.Phonetisize(req.params.get('text'))
+    if not pron:
+      res.body = '**Error! Invalid input'
+    else:
+      res.body = ' '.join(pron)
 
 g2p = None
 api = falcon.API()
@@ -75,6 +79,6 @@ api.add_route('/', UIResource())
 if __name__ == '__main__':
     from wsgiref import simple_server
     args = parse_args()
-    g2p = PyG2P(args.nn, args.nn_meta, args.fst)
+    g2p = PyG2P(args.nn, args.nn_meta, args.fst, args.dict)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     simple_server.make_server('0.0.0.0', 9000, api).serve_forever()

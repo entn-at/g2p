@@ -5,6 +5,7 @@
 #include <cmath>
 #include <map>
 #include <unordered_map>
+#include <algorithm>
 
 #include "tensorflow/core/graph/graph_def_builder.h"
 #include "tensorflow/core/public/session.h"
@@ -68,6 +69,7 @@ private:
 
 	PhonetisaurusScript *_fst_decoder = NULL;
 
+	bool IsStringOk(string word);
 	vector<pair<string, Tensor> > PrepareNNInput(string instr);
 	vector<string> PhonetisizeNN(string instr);
 	vector<string> PhonetisizeFST(string instr);
@@ -161,12 +163,7 @@ G2P::Impl::GetShortestPath(VectorFst<StdArc> *res_fst, string name) {
 
 vector<pair<string, Tensor> >
 G2P::Impl::PrepareNNInput(string instr) {
-	vector<pair<string, Tensor> > inputs;
 	int instr_len = instr.length();
-	if (instr_len == 0) {
-		return inputs;
-	}
-
 	int alloc_len = instr_len;
 	if (strcmp(_nn_model_type, "ctc") == 0) {
 		alloc_len += 3;
@@ -185,6 +182,7 @@ G2P::Impl::PrepareNNInput(string instr) {
 	for (int i = 0; i < alloc_len - instr_len; i++) {
 		input_map(0, instr_len + i) = _g2i.size();
 	}
+	vector<pair<string, Tensor> > inputs;
 	inputs.push_back(std::make_pair("graphemes_ph", input));
 	tensorflow::Tensor slen_input(tensorflow::DT_INT32, tensorflow::TensorShape({1}));
 	auto slen_map = slen_input.tensor<int, 1>();
@@ -193,8 +191,36 @@ G2P::Impl::PrepareNNInput(string instr) {
 	return inputs;
 }
 
+bool
+G2P::Impl::IsStringOk(string word) {
+	if (word.empty()) {
+		return false;
+	}
+	for (int i = 0; i < word.length(); i++) {
+		if (_session != NULL) {
+			if (_g2i.find(string(1, word[i])) == _g2i.end()) {
+				return false;
+			}
+		} else if (_fst_decoder != NULL) {
+			if (_fst_decoder->FindOsym(string(1, word[i])) == -1) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 vector<string>
 G2P::Impl::Phonetisize(string instr) {
+
+	/* to lower case */
+	transform(instr.begin(), instr.end(), instr.begin(), ::tolower);
+
+	if (!IsStringOk(instr)) {
+		vector<string> empty_pron;
+		return empty_pron;
+	}
+
 	if (_dict.size() > 0) {
 		unordered_map<string, vector<string> >::const_iterator got = _dict.find(instr);
 		if (got != _dict.end()) {

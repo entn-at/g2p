@@ -19,6 +19,10 @@ int main(int argc, char **argv) {
 	while (fgets(word, MAX_WORD_LEN, stdin)) {
 		char *trimmed_word = strtok(word, "\n");
 		vector<string> pron = g2p->Phonetisize(string(trimmed_word));
+		if (pron.empty()) {
+			fprintf(stderr, "**Error! Invalid input\n");
+			continue;
+		}
 		fprintf(stderr, "%s\t", trimmed_word);
 		for (vector<string>::iterator it = pron.begin(); it != pron.end(); it++) {
 			if (it != pron.begin()) {
