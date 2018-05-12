@@ -64,11 +64,11 @@ def main():
     g2i = get_graphemes_map(d)
     p2i = get_phonemes_map(d)
     if len(g2i) + 1 != hparams.graphemes_num:
-        print('**Warning! Number of graphemes in hparams changed to %d' % len(g2i) + 1)
+        print('**Warning! Number of graphemes in hparams changed to %d' % (len(g2i) + 1))
         hparams.graphemes_num =  len(g2i) + 1
     extra = 1 if args.model_type.endswith('ctc') else 2
     if len(p2i) + extra != hparams.phonemes_num:
-        print('**Warning! Number of phonemes in hparams changed to %d' % len(p2i) + extra)
+        print('**Warning! Number of phonemes in hparams changed to %d' % (len(p2i) + extra))
         hparams.phonemes_num = len(p2i) + extra
 
     with open('%s/hparams' % args.model_dir, 'w') as outfp:
