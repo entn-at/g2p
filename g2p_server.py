@@ -17,6 +17,13 @@ button {background: #28d; padding: 9px 14px; margin-left: 8px; border: none; out
 button:hover {box-shadow: 0 1px 2px rgba(0,0,0,.15); opacity: 0.9;}
 button:active {background: #29f;}
 button[disabled] {opacity: 0.4; cursor: default}
+footer {
+background-color: #FFF;
+position:fixed;
+bottom: 0px;
+width: 100%;
+text-align: center;
+}
 </style>
 <body>
 <form>
@@ -24,6 +31,9 @@ button[disabled] {opacity: 0.4; cursor: default}
   <button id="button" name="phonetisize">Phonetisize</button>
 </form>
 <p id="message"></p>
+<footer align="center">
+  <p>bicuser470@gmail.com <a href="https://github.com/bic-user/g2p">github</a></p>
+</footer>
 <script>
 function q(selector) {return document.querySelector(selector)}
 q('#text').focus()
