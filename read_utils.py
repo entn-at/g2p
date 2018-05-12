@@ -59,6 +59,10 @@ def filter_rare_graphemes(d, threshold=1000):
     for c, v in freq.items():
         if v < threshold:
             to_drop.append(c)
+    # filter symbols reserved for fst
+    to_drop.append('_')
+    to_drop.append('}')
+    to_drop.append('|')
     to_drop = set(to_drop)
 
     d_filt = []
