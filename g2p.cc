@@ -15,6 +15,8 @@
 
 #include "g2p.h"
 
+#define MAX_WORD_LEN 35
+
 using namespace std;
 using namespace fst;
 using namespace tensorflow;
@@ -52,6 +54,7 @@ read_nn_meta(string path, char *model_type, std::map<string, int> *g2i,
 		i2p->insert(pair<int, string>(idx++, string(phoneme)));
 		phoneme = strtok(NULL, " \n");
 	}
+	fclose(fp);
 }
 
 class G2P::Impl {
@@ -104,6 +107,7 @@ read_dict(string path, unordered_map<string, vector<string> > &dict) {
 		}
 		dict.insert(make_pair(string(word), pron));
 	}
+	fclose(fp);
 }
 
 G2P::Impl::Impl(string nn_path, string nn_meta, string fst_path, string dict_path) {
@@ -139,6 +143,13 @@ G2P::Impl::Impl(string nn_path, string nn_meta, string fst_path, string dict_pat
 
 G2P::Impl::~Impl()
 {
+	if (_fst_decoder) {
+		delete _fst_decoder;
+	}
+	if (_session) {
+		_session->Close();
+		delete _session;
+	}
 }
 
 vector<string>
@@ -194,6 +205,9 @@ G2P::Impl::PrepareNNInput(string instr) {
 bool
 G2P::Impl::IsStringOk(string word) {
 	if (word.empty()) {
+		return false;
+	}
+	if (word.length() > MAX_WORD_LEN) {
 		return false;
 	}
 	for (int i = 0; i < word.length(); i++) {
