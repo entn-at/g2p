@@ -216,7 +216,7 @@ G2P::Impl::IsStringOk(string word) {
 				return false;
 			}
 		} else if (_fst_decoder != NULL) {
-			if (_fst_decoder->FindOsym(string(1, word[i])) == -1) {
+			if (_fst_decoder->FindIsym(string(1, word[i])) == -1) {
 				return false;
 			}
 		}
