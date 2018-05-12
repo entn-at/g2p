@@ -12,7 +12,8 @@ using namespace std;
 
 int main(int argc, char **argv) {
 
-	G2P *g2p = new G2P(string(argv[1]), string(argv[2]), string(argv[3]));
+	G2P *g2p = new G2P(string(argv[1]), string(argv[2]), string(argv[3]),
+			string(argv[4]));
 
 	char word[MAX_WORD_LEN];
 	while (fgets(word, MAX_WORD_LEN, stdin)) {

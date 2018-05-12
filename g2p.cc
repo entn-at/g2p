@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cmath>
 #include <map>
+#include <unordered_map>
 
 #include "tensorflow/core/graph/graph_def_builder.h"
 #include "tensorflow/core/public/session.h"
@@ -54,15 +55,16 @@ read_nn_meta(string path, char *model_type, std::map<string, int> *g2i,
 
 class G2P::Impl {
 public:
-	Impl(string nn_path, string nn_meta, string fst_path);
+	Impl(string nn_path, string nn_meta, string fst_path, string dict_path);
 	~Impl();
 	vector<string> Phonetisize(string instr);
 private:
 	tensorflow::Session* _session = NULL;
 	tensorflow::GraphDef _graph_def;
 	char _nn_model_type[64];
-	std::map<std::string, int> _g2i;
-	std::map<int, std::string> _i2p;
+	map<string, int> _g2i;
+	map<int, string> _i2p;
+	unordered_map<string, vector<string> > _dict;
 
 	PhonetisaurusScript *_fst_decoder = NULL;
 
@@ -73,8 +75,8 @@ private:
 	vector<string> GetShortestPath(VectorFst<StdArc> *res_fst, std::string name);
 };
 
-G2P::G2P(string nn_path, string nn_meta, string fst_path)
-: pimpl(new Impl(nn_path, nn_meta, fst_path)) {}
+G2P::G2P(string nn_path, string nn_meta, string fst_path, string dict_path)
+: pimpl(new Impl(nn_path, nn_meta, fst_path, dict_path)) {}
 
 G2P::~G2P() {
 	delete pimpl;
@@ -85,7 +87,24 @@ G2P::Phonetisize(string instr) {
 	return pimpl->Phonetisize(instr);
 }
 
-G2P::Impl::Impl(string nn_path, string nn_meta, string fst_path) {
+static void
+read_dict(string path, unordered_map<string, vector<string> > &dict) {
+	FILE *fp = fopen(path.c_str(), "r");
+	char line[1024];
+	while (fgets(line, 1024, fp)) {
+		char *word = strtok(line, "\t\n");
+		char *phonemes = strtok(NULL, "\t\n");
+		char *phoneme = strtok(phonemes, " \n");
+		vector<string> pron;
+		while (phoneme != NULL) {
+			pron.push_back(string(phoneme));
+			phoneme = strtok(NULL, " \n");
+		}
+		dict.insert(make_pair(string(word), pron));
+	}
+}
+
+G2P::Impl::Impl(string nn_path, string nn_meta, string fst_path, string dict_path) {
 	if (!nn_path.empty()) {
 		/* Load the nn model */
 		Status status = NewSession(SessionOptions(), &_session);
@@ -109,6 +128,10 @@ G2P::Impl::Impl(string nn_path, string nn_meta, string fst_path) {
 	if (!fst_path.empty()) {
 		/* Load fst model */
 		_fst_decoder = new PhonetisaurusScript(fst_path, "");
+	}
+	if (!dict_path.empty()) {
+		/* load dictionary */
+		read_dict(dict_path, _dict);
 	}
 }
 
@@ -172,6 +195,13 @@ G2P::Impl::PrepareNNInput(string instr) {
 
 vector<string>
 G2P::Impl::Phonetisize(string instr) {
+	if (_dict.size() > 0) {
+		unordered_map<string, vector<string> >::const_iterator got = _dict.find(instr);
+		if (got != _dict.end()) {
+			return got->second;
+		}
+	}
+
 	if (_fst_decoder == NULL) {
 		return PhonetisizeNN(instr);
 	} else if (_session == NULL) {

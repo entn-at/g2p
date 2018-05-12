@@ -11,6 +11,7 @@ def parse_args():
     arg_parser.add_argument('--nn', default='', help='Path to nn model')
     arg_parser.add_argument('--nn-meta', default='', help='Path to nn meta')
     arg_parser.add_argument('--fst', default='', help='Path to fst')
+    arg_parser.add_argument('--dict', default='', help='Path to dict')
     args = arg_parser.parse_args()
     if not args.nn and not args.fst:
         raise RuntimeError('**Error! Either nn or fst or both should be provided')
@@ -20,12 +21,14 @@ def parse_args():
         raise RuntimeError('**Error! Cant open nn or meta')
     if args.fst and not os.path.isfile(args.fst):
         raise RuntimeError('**Error! Cant open fst')
+    if args.dict and not os.path.isfile(args.dict):
+        raise RuntimeError('**Error! Cant open dict')
     return args
 
 
 def main():
     args = parse_args()
-    g2p = PyG2P(args.nn, args.nn_meta, args.fst)
+    g2p = PyG2P(args.nn, args.nn_meta, args.fst, args.dict)
     while True:
         try:
             word = sys.stdin.readline().strip()
@@ -35,7 +38,7 @@ def main():
         if not word:
             break
 
-        print(g2p.Phonetisize(word))
+        print('%s\t%s' % (word, ' '.join(g2p.Phonetisize(word))))
 
 
 if __name__ == '__main__':
