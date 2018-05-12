@@ -59,12 +59,20 @@ def main():
 
     G2PModel, hparams = import_model_type(args.model_type)
     hparams.parse(args.hparams)
-    with open('%s/hparams' % args.model_dir, 'w') as outfp:
-        json.dump(hparams.to_json(), outfp)
 
     d = read_dict(args.train)
     g2i = get_graphemes_map(d)
     p2i = get_phonemes_map(d)
+    if len(g2i) + 1 != hparams.graphemes_num:
+        print('**Warning! Number of graphemes in hparams changed to %d' % len(g2i) + 1)
+        hparams.graphemes_num =  len(g2i) + 1
+    extra = 1 if args.model_type.endswith('ctc') else 2
+    if len(p2i) + extra != hparams.phonemes_num:
+        print('**Warning! Number of phonemes in hparams changed to %d' % len(p2i) + extra)
+        hparams.phonemes_num = len(p2i) + extra
+
+    with open('%s/hparams' % args.model_dir, 'w') as outfp:
+        json.dump(hparams.to_json(), outfp)
     write_meta(args.model_type, g2i, p2i, '%s/meta' % args.model_dir)
 
     traind = encode_dict(d, g2i, p2i)
