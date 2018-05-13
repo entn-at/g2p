@@ -15,6 +15,8 @@ Performance on amepd (using split by read_utils) in WER / stressless WER:
 Performance on cmudict in WER / stressless WER:
 
 * phonetisaurus 8-gram: 0.405269 / 0.332987
+* transformer: 0.3581 / 0.3137
+* transformer + 8-gram fst: 0.3520 / 0.3026
 
 Performance on beep (net-talk) in stressless WER:
 
