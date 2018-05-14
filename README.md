@@ -21,6 +21,8 @@ Performance on cmudict in WER / stressless WER:
 Performance on beep (net-talk) in stressless WER:
 
 * phonetisaurus 8-gram: 0.211417
+* transformer: 0.2011
+* transformer + 8-gram fst: 0.2206
 
 Performance on runshm in WER / stressless WER:
 
