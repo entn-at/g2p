@@ -2,21 +2,23 @@
 import io
 import argparse
 import falcon
+import json
 import os
 
 from libg2p import PyG2P
-from g2p_app import parse_args
 
 html_body = '''<html><title>G2P</title>
 <style>
 body {padding: 16px; font-family: sans-serif; font-size: 14px; color: #444}
 div {
     background: white;
-    position: fixed;
+    position: relative;
     top: 50%;
     left: 50%;
-    margin-top: -10%;
-    margin-left: -5%;
+    width: 100%;
+    height: 100%;
+    margin-top: -13%;
+    margin-left: -7%;
 }
 input {font-size: 14px; padding: 8px 12px; outline: none; border: 1px solid #ddd}
 p {padding: 12px}
@@ -35,12 +37,22 @@ text-align: center;
 </style>
 <body>
 <div>
-<p align="center">Submit word list:</p>
+
+<p id="languages">
+<input type="radio" name="lang" id="en_us" value="en_us" checked>
+<label for="en_us">en_us</label>
+<input type="radio" name="lang" id="en_gb" value="en_gb" style="margin-left:20px">
+<label for="en_gb">en_gb</label>
+<input type="radio" name="lang" id="ru" value="ru" style="margin-left:20px">
+<label for="other">ru</label>
+</p>
+
+<p>Submit word list:</p>
 <input type="file" id="word_list" accept="text/*" size="30">
-<p align="center">or</p>
+<p>or</p>
 <input id="text" type="text" size="30" placeholder="Enter word" style="margin-top:5px">
-<p align="center"><button id="button" name="phonetisize" style="margin-top:10px">Phonetisize</button></p>
-<p align="center" id="message"></p>
+<p><button id="button" name="phonetisize" style="margin-top:10px">Phonetisize</button></p>
+<p id="message"></p>
 </div>
 <footer align="center">
   <p>bicuser470@gmail.com <a href="https://github.com/bic-user/g2p">github</a></p>
@@ -52,21 +64,37 @@ q('#button').addEventListener('click', function(e) {
   path = q('#word_list').value.trim()
   console.log(text)
   console.log(path)
+  lang = ""
+  if (q('#en_us').checked) {
+    lang = "en_us"
+  } else if (q('#en_gb').checked) {
+    lang = "en_gb"
+  } else if (q('#ru').checked) {
+    lang = "ru"
+  }
+  console.log(lang)
   if (path) {
     q('#message').textContent = 'Generating pronunciation for word list...'
     q('#button').disabled = true
-    phonetisize_batch(q('#word_list').files[0])
+    file = q('#word_list').files[0]
+    if(file.size > 1048576) {
+        q('#message').textContent = 'Provided file is too big'
+        q('#word_list').value = ''
+        q('#button').disabled = false
+    } else {
+        phonetisize_batch(file, lang)
+    }
   }
   if (text) {
     q('#message').textContent = 'Generating pronunciation for word...'
     q('#button').disabled = true
-    phonetisize(text)
+    phonetisize(text, lang)
   }
   e.preventDefault()
   return false
 })
-function phonetisize(text) {
-  fetch('/phonetisize?text=' + encodeURIComponent(text), {cache: 'no-cache'})
+function phonetisize(text, lang) {
+  fetch('/phonetisize?lang=' + lang + '&text=' + encodeURIComponent(text), {cache: 'no-cache'})
     .then(function(res) {
       if (!res.ok) throw Error(res.statusText)
       return res.text()
@@ -78,8 +106,8 @@ function phonetisize(text) {
       q('#button').disabled = false
     })
 }
-function phonetisize_batch(file) {
-  fetch('/phonetisize', { method: 'POST', body:file }, { responseType: 'blob' })
+function phonetisize_batch(file, lang) {
+  fetch('/phonetisize?lang=' + lang, { method: 'POST', body:file }, { responseType: 'blob' })
     .then(function(res){
       res.blob().then(function(blob) {
         console.log(blob)
@@ -96,6 +124,9 @@ function phonetisize_batch(file) {
       q('#button').disabled = false
       q('#word_list').value = ''
       q('#message').textContent = ''
+    }).catch(function(err) {
+      q('#message').textContent = 'Error: ' + err.message
+      q('#button').disabled = false
     })
 }
 </script></body></html>
@@ -109,34 +140,65 @@ class UIResource:
 
 
 class PhonetisizeResource:
+
   def on_get(self, req, res):
+    if not req.params.get('lang'):
+      raise falcon.HTTPBadRequest('Language code is not provided')
     if not req.params.get('text'):
-      raise falcon.HTTPBadRequest()
-    pron = g2p.Phonetisize(req.params.get('text'))
+      raise falcon.HTTPBadRequest('Word for phonetisation is not provided')
+    lang = req.params.get('lang')
+    if lang not in g2p:
+      raise falcon.HTTPBadRequest('Language is not supported')
+    print(req.params.get('lang'))
+    pron = g2p[lang].Phonetisize(req.params.get('text'))
     if not pron:
       res.body = '**Error! Invalid input or empty pronunciation'
     else:
       res.body = ' '.join(pron)
+
   def on_post(self, req, res):
+      if not req.params.get('lang'):
+        raise falcon.HTTPBadRequest('Language code is not provided')
+      lang = req.params.get('lang')
+      if lang not in g2p:
+        raise falcon.HTTPBadRequest('Language is not supported')
       words = req.stream.read().decode().split('\n')
       if not words[-1]:
           words = words[:-1]
       outfp = io.BytesIO()
       for w in words:
-          pron = g2p.Phonetisize(w)
+          pron = g2p[lang].Phonetisize(w)
           outfp.write(('%s\t%s\n' % (w, ' '.join(pron))).encode())
       res.data = outfp.getvalue()
 
-
-g2p = None
+g2p = {}
 api = falcon.API()
 api.add_route('/phonetisize', PhonetisizeResource())
 api.add_route('/', UIResource())
 
 
+def parse_args():
+    arg_parser = argparse.ArgumentParser(description='Parses args for g2p server')
+    arg_parser.add_argument('--config', required=True, help='Path to json with models config')
+    args = arg_parser.parse_args()
+    if not os.path.isfile(args.config):
+        raise RuntimeError('**Error! Failed to open %s' % args.config)
+    return args
+
+
 if __name__ == '__main__':
     from wsgiref import simple_server
     args = parse_args()
-    g2p = PyG2P(args.nn, args.nn_meta, args.fst, args.dict)
+    with open(args.config, 'r') as infp:
+        config = json.load(infp)
+    for lang in config.keys():
+        py_g2p_args = []
+        for name in ['nn', 'nn_meta', 'fst', 'dict']:
+            if config[lang][name]:
+                if not os.path.isfile(config[lang][name]):
+                    raise RuntimeError('**Error! Cant open %s' % config[lang][name])
+            py_g2p_args.append(config[lang][name])
+        g2p[lang] = PyG2P(*py_g2p_args)
+
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     simple_server.make_server('0.0.0.0', 80, api).serve_forever()

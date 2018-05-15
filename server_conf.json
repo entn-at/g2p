@@ -1,0 +1,1 @@
+{"ru": {"nn_meta": "", "dict": "runshm_pretrained/dict", "fst": "runshm_pretrained/runshm8gram.fst", "nn": ""}, "en_us": {"nn_meta": "", "dict": "amepdn_pretrained/dict", "fst": "amepdn_pretrained/amepd8gram.fst", "nn": ""}, "en_gb": {"nn_meta": "", "dict": "beep_pretrained/dict", "fst": "beep_pretrained/beep8gram.fst", "nn": ""}}
