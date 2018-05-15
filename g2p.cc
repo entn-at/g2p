@@ -5,7 +5,6 @@
 #include <cmath>
 #include <map>
 #include <unordered_map>
-#include <algorithm>
 
 #include "tensorflow/core/graph/graph_def_builder.h"
 #include "tensorflow/core/public/session.h"
@@ -14,6 +13,7 @@
 #include "fst/fstlib.h"
 
 #include "g2p.h"
+#include "universal_lowercase.h"
 
 #define MAX_WORD_LEN 35
 
@@ -72,11 +72,11 @@ private:
 
 	PhonetisaurusScript *_fst_decoder = NULL;
 
-	bool IsStringOk(string word);
-	vector<pair<string, Tensor> > PrepareNNInput(string instr);
-	vector<string> PhonetisizeNN(string instr);
+	bool IsStringOk(vector<string> &graphemes);
+	vector<pair<string, Tensor> > PrepareNNInput(vector<string> &graphemes);
+	vector<string> PhonetisizeNN(vector<string> &graphemes);
 	vector<string> PhonetisizeFST(string instr);
-	vector<string> PhonetisizeIntersect(string instr);
+	vector<string> PhonetisizeIntersect(string instr, vector<string> &graphemes);
 	vector<string> GetShortestPath(VectorFst<StdArc> *res_fst, std::string name);
 };
 
@@ -173,8 +173,8 @@ G2P::Impl::GetShortestPath(VectorFst<StdArc> *res_fst, string name) {
 }
 
 vector<pair<string, Tensor> >
-G2P::Impl::PrepareNNInput(string instr) {
-	int instr_len = instr.length();
+G2P::Impl::PrepareNNInput(vector<string> &graphemes) {
+	int instr_len = graphemes.size();
 	int alloc_len = instr_len;
 	if (strcmp(_nn_model_type, "ctc") == 0) {
 		alloc_len += 3;
@@ -184,11 +184,8 @@ G2P::Impl::PrepareNNInput(string instr) {
 	Tensor input(DT_INT32, TensorShape({1, alloc_len}));
 	auto input_map = input.tensor<int, 2>();
 
-	char grapheme[2];
-	grapheme[1] = '\0';
 	for (int i = 0; i < instr_len; i++) {
-		grapheme[0] = instr[i];
-		input_map(0, i) = _g2i.find(string(grapheme))->second;
+		input_map(0, i) = _g2i.find(graphemes[i])->second;
 	}
 	for (int i = 0; i < alloc_len - instr_len; i++) {
 		input_map(0, instr_len + i) = _g2i.size();
@@ -203,20 +200,21 @@ G2P::Impl::PrepareNNInput(string instr) {
 }
 
 bool
-G2P::Impl::IsStringOk(string word) {
-	if (word.empty()) {
+G2P::Impl::IsStringOk(vector<string> &graphemes) {
+	if (graphemes.empty()) {
 		return false;
 	}
-	if (word.length() > MAX_WORD_LEN) {
+	if (graphemes.size() > MAX_WORD_LEN) {
 		return false;
 	}
-	for (int i = 0; i < word.length(); i++) {
+
+	for (int i = 0; i < graphemes.size(); i++) {
 		if (_session != NULL) {
-			if (_g2i.find(string(1, word[i])) == _g2i.end()) {
+			if (_g2i.find(graphemes[i]) == _g2i.end()) {
 				return false;
 			}
 		} else if (_fst_decoder != NULL) {
-			if (_fst_decoder->FindIsym(string(1, word[i])) == -1) {
+			if (_fst_decoder->FindIsym(graphemes[i]) == -1) {
 				return false;
 			}
 		}
@@ -225,12 +223,23 @@ G2P::Impl::IsStringOk(string word) {
 }
 
 vector<string>
-G2P::Impl::Phonetisize(string instr) {
+G2P::Impl::Phonetisize(string instr_case) {
 
 	/* to lower case */
-	transform(instr.begin(), instr.end(), instr.begin(), ::tolower);
+	string instr = lowercase(instr_case);
 
-	if (!IsStringOk(instr)) {
+	vector<string> graphemes;
+	for (size_t i = 0; i < instr.length();) {
+		int cplen = 1;
+		if((instr[i] & 0xf8) == 0xf0) cplen = 4;
+		else if((instr[i] & 0xf0) == 0xe0) cplen = 3;
+		else if((instr[i] & 0xe0) == 0xc0) cplen = 2;
+		if((i + cplen) > instr.length()) cplen = 1;
+		graphemes.push_back(instr.substr(i, cplen));
+		i += cplen;
+	}
+
+	if (!IsStringOk(graphemes)) {
 		vector<string> empty_pron;
 		return empty_pron;
 	}
@@ -243,17 +252,17 @@ G2P::Impl::Phonetisize(string instr) {
 	}
 
 	if (_fst_decoder == NULL) {
-		return PhonetisizeNN(instr);
+		return PhonetisizeNN(graphemes);
 	} else if (_session == NULL) {
 		return PhonetisizeFST(instr);
 	} else {
-		return PhonetisizeIntersect(instr);
+		return PhonetisizeIntersect(instr, graphemes);
 	}
 }
 
 vector<string>
-G2P::Impl::PhonetisizeNN(string instr) {
-	vector<pair<string, Tensor> > inputs = PrepareNNInput(instr);
+G2P::Impl::PhonetisizeNN(vector<string> &graphemes) {
+	vector<pair<string, Tensor> > inputs = PrepareNNInput(graphemes);
 	std::vector<tensorflow::Tensor> outputs;
 	Status status = _session->Run(inputs, {"g2p/predicted_1best"}, {}, &outputs);
 	if (!status.ok()) {
@@ -295,8 +304,8 @@ G2P::Impl::PhonetisizeFST(string instr) {
 }
 
 vector<string>
-G2P::Impl::PhonetisizeIntersect(string instr) {
-	vector<pair<string, Tensor> > inputs = PrepareNNInput(instr);
+G2P::Impl::PhonetisizeIntersect(string instr, vector<string> &graphemes) {
+	vector<pair<string, Tensor> > inputs = PrepareNNInput(graphemes);
 	std::vector<tensorflow::Tensor> outputs;
 	Status status = _session->Run(inputs, {"g2p/probs"}, {}, &outputs);
 	if (!status.ok()) {
