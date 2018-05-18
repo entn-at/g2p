@@ -5,7 +5,7 @@ from libcpp.vector cimport vector
 cdef extern from "g2p.h":
     cdef cppclass G2P:
         G2P(string, string, string, string)
-        vector[string]& Phonetisize(string)
+        vector[vector[string]]& Phonetisize(vector[string]&)
 
 cdef class PyG2P:
     cdef G2P *thisptr
@@ -17,7 +17,7 @@ cdef class PyG2P:
         self.thisptr = new G2P(nnpath_c, nnmeta_c, fstpath_c, dictpath_c)
     def __dealloc__(self):
         del self.thisptr
-    def Phonetisize(self, word):
-        cdef string word_c = word.encode()
-        res = self.thisptr.Phonetisize(word_c)
-        return [x.decode('utf-8') for x in res]
+    def Phonetisize(self, words):
+        words_c = [w.encode() for w in words]
+        res = self.thisptr.Phonetisize(words_c)
+        return [[p.decode('utf-8') for p in word] for word in res]

@@ -12,7 +12,7 @@ public:
 			std::string dict_path);
 	~G2P();
 
-	std::vector<std::string> Phonetisize(std::string instr);
+	std::vector<std::vector<std::string> > Phonetisize(std::vector<std::string> words);
 
 private:
 	class Impl;

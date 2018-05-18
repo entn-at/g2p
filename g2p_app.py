@@ -29,19 +29,19 @@ def parse_args():
 def main():
     args = parse_args()
     g2p = PyG2P(args.nn, args.nn_meta, args.fst, args.dict)
+    words = []
     while True:
         try:
             word = sys.stdin.readline().strip()
         except KeyboardInterrupt:
             break
-
         if not word:
             break
-        pron = g2p.Phonetisize(word)
-        if not pron:
-            print('**Error! Invalid input')
-        else:
-            print('%s\t%s' % (word, ' '.join(pron)))
+        words.append(word)
+
+    pron = g2p.Phonetisize(words)
+    for w, p in zip(words, pron):
+            print('%s\t%s' % (w, ' '.join(p)))
 
 
 if __name__ == '__main__':

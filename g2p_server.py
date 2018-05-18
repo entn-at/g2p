@@ -150,7 +150,7 @@ class PhonetisizeResource:
     if lang not in g2p:
       raise falcon.HTTPBadRequest('Language is not supported')
     print(req.params.get('lang'))
-    pron = g2p[lang].Phonetisize(req.params.get('text'))
+    pron = g2p[lang].Phonetisize([req.params.get('text')])[0]
     if not pron:
       res.body = '**Error! Invalid input or empty pronunciation'
     else:
@@ -166,9 +166,9 @@ class PhonetisizeResource:
       if not words[-1]:
           words = words[:-1]
       outfp = io.BytesIO()
-      for w in words:
-          pron = g2p[lang].Phonetisize(w)
-          outfp.write(('%s\t%s\n' % (w, ' '.join(pron))).encode())
+      pron = g2p[lang].Phonetisize(words)
+      for w, p in zip(words, pron):
+          outfp.write(('%s\t%s\n' % (w, ' '.join(p))).encode())
       res.data = outfp.getvalue()
 
 g2p = {}
