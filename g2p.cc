@@ -15,7 +15,7 @@
 #include "g2p.h"
 #include "universal_lowercase.h"
 
-#define MAX_WORD_LEN 35
+#define MAX_WORD_LEN 33
 #define BATCH_SIZE 256
 
 using namespace std;
@@ -210,7 +210,7 @@ G2P::Impl::IsStringOk(vector<string> &graphemes) {
 	if (graphemes.empty()) {
 		return false;
 	}
-	if (graphemes.size() > MAX_WORD_LEN) {
+	if (graphemes.size() >= MAX_WORD_LEN) {
 		return false;
 	}
 
