@@ -1,6 +1,6 @@
 # G2P (Grapheme-to-phoneme)
 
-Repo with code for pronunciation generation. Several approaches are implemented and evaluated on different open-source dictionaries. To my best knowledge this is the most accurate g2p on the web! You can try it out here: [__demo__](http://159.69.1.31/)
+Repo with code for pronunciation generation. Several approaches are implemented and evaluated on different open-source dictionaries. To my knowledge this is the most accurate g2p on the web! You can try it out here: [__demo__](http://159.69.1.31/)
 
 ## Why?
 
@@ -60,11 +60,11 @@ Be aware! Not all of them are suitable for commerical usage.
 ## Constrained g2p
 In real-life applications, combining FST and nural g2p to gain couple of percents might seem an overkill, but for if there is a memory constrain, neural g2p still has something to offer. Some results for amepd:
 
-	approach    | model size |  WER, %       | stressless WER, %
-	------------|------------|---------------|-------------------
-	fst 3-gram  | 1.9mB      | 0.4829        | 0.3812
-	small ctc   | 1.1mB      | 0.3608        | 0.3108
-	
+approach    | model size |  WER, %       | stressless WER, %
+------------|------------|---------------|-------------------
+fst 3-gram  | 1.9mB      | 0.4829        | 0.3812
+small ctc   | 1.1mB      | 0.3608        | 0.3108
+
 ## TODO
 Possible improvements:
 
