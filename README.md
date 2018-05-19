@@ -1,6 +1,6 @@
-# G2P (Grapheme-to-phoneme)
+# G2P (Grapheme-to-phoneme) [__demo__](http://159.69.1.31/)
 
-Repo with code for pronunciation generation. Several approaches are implemented and evaluated on different open-source dictionaries. To my knowledge this is the most accurate g2p on the web! You can try it out here: [__demo__](http://159.69.1.31/)
+Repo with code for pronunciation generation. Several approaches are implemented and evaluated on different open-source dictionaries. To my best knowledge this is the most accurate g2p on the web!
 
 ## Why?
 
