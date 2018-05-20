@@ -13,6 +13,8 @@ public:
 	~G2P();
 
 	std::vector<std::vector<std::string> > Phonetisize(std::vector<std::string> words);
+	std::vector<std::string> GetGraphemes();
+	std::vector<std::string> GetPhonemes();
 
 private:
 	class Impl;

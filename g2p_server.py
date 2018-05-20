@@ -13,12 +13,8 @@ body {padding: 16px; font-family: sans-serif; font-size: 14px; color: #444}
 div {
     background: white;
     position: relative;
-    top: 50%;
-    left: 50%;
     width: 100%;
     height: 100%;
-    margin-top: -13%;
-    margin-left: -7%;
 }
 input {font-size: 14px; padding: 8px 12px; outline: none; border: 1px solid #ddd}
 p {padding: 12px}
@@ -47,6 +43,11 @@ text-align: center;
 <label for="other">ru</label>
 </p>
 
+<p>
+<button id="button_graphemes" name="graphemes" style="margin-top:10px">Graphemes</button>
+<button id="button_phonemes" name="phonemes" style="margin-top:10px">Phonemes</button>
+</p>
+
 <p>Submit word list:</p>
 <input type="file" id="word_list" accept="text/*" size="30">
 <p>or</p>
@@ -59,20 +60,19 @@ text-align: center;
 </footer>
 <script>
 function q(selector) {return document.querySelector(selector)}
+
+q('#button_graphemes').addEventListener('click', function(e) {
+    lang = get_lang()
+    window.location = '/graphemes?lang=' + lang
+})
+q('#button_phonemes').addEventListener('click', function(e) {
+    lang = get_lang()
+    window.location = '/phonemes?lang=' + lang
+})
 q('#button').addEventListener('click', function(e) {
   text = q('#text').value.trim()
   path = q('#word_list').value.trim()
-  console.log(text)
-  console.log(path)
-  lang = ""
-  if (q('#en_us').checked) {
-    lang = "en_us"
-  } else if (q('#en_gb').checked) {
-    lang = "en_gb"
-  } else if (q('#ru').checked) {
-    lang = "ru"
-  }
-  console.log(lang)
+  lang = get_lang()
   if (path) {
     q('#message').textContent = 'Generating pronunciation for word list...'
     q('#button').disabled = true
@@ -93,17 +93,30 @@ q('#button').addEventListener('click', function(e) {
   e.preventDefault()
   return false
 })
+function get_lang() {
+  lang = ""
+  if (q('#en_us').checked) {
+    lang = "en_us"
+  } else if (q('#en_gb').checked) {
+    lang = "en_gb"
+  } else if (q('#ru').checked) {
+    lang = "ru"
+  }
+  return lang
+}
 function phonetisize(text, lang) {
   fetch('/phonetisize?lang=' + lang + '&text=' + encodeURIComponent(text), {cache: 'no-cache'})
     .then(function(res) {
       if (!res.ok) throw Error(res.statusText)
       return res.text()
     }).then(function(pron) {
-      q('#message').textContent = pron
+      q('#message').textContent = q('#text').value.trim() + '  ' + pron
+      q('#text').value = ''
       q('#button').disabled = false
     }).catch(function(err) {
       q('#message').textContent = 'Error: ' + err.message
       q('#button').disabled = false
+      q('#text').value = ''
     })
 }
 function phonetisize_batch(file, lang) {
@@ -143,16 +156,15 @@ class PhonetisizeResource:
 
   def on_get(self, req, res):
     if not req.params.get('lang'):
-      raise falcon.HTTPBadRequest('Language code is not provided')
+      raise falcon.HTTPBadRequest('**Error! Language code is not provided')
     if not req.params.get('text'):
-      raise falcon.HTTPBadRequest('Word for phonetisation is not provided')
+      raise falcon.HTTPBadRequest('**Error! Word for phonetisation is not provided')
     lang = req.params.get('lang')
     if lang not in g2p:
-      raise falcon.HTTPBadRequest('Language is not supported')
-    print(req.params.get('lang'))
+      raise falcon.HTTPBadRequest('**Error! Language is not supported')
     pron = g2p[lang].Phonetisize([req.params.get('text')])[0]
     if not pron:
-      res.body = '**Error! Invalid input or empty pronunciation'
+      raise falcon.HTTPBadRequest('**Error! Invalid input or empty pronunciation')
     else:
       res.body = ' '.join(pron)
 
@@ -171,15 +183,45 @@ class PhonetisizeResource:
           outfp.write(('%s\t%s\n' % (w, ' '.join(p))).encode())
       res.data = outfp.getvalue()
 
+
+class GraphemesResource():
+    def on_get(self, req, res):
+        if not req.params.get('lang'):
+            raise falcon.HTTPBadRequest('Language code is not provided')
+        lang = req.params.get('lang')
+        if lang not in g2p:
+            raise falcon.HTTPBadRequest('Language is not supported')
+
+        res.content_type = 'text/html'
+        line = '</br>'.join(g2p[lang].GetGraphemes())
+        res.body = '<html><title>G2P graphemes</title><meta charset="utf-8"/><body></body>%s</html>' % line
+
+
+class PhonemesResource():
+    def on_get(self, req, res):
+        if not req.params.get('lang'):
+            raise falcon.HTTPBadRequest('Language code is not provided')
+        lang = req.params.get('lang')
+        if lang not in g2p:
+            raise falcon.HTTPBadRequest('Language is not supported')
+
+        res.content_type = 'text/html'
+        line = '</br>'.join(g2p[lang].GetPhonemes())
+        res.body = '<html><title>G2P phonemes</title><meta charset="utf-8"/><body></body>%s</html>' % line
+
+
 g2p = {}
 api = falcon.API()
 api.add_route('/phonetisize', PhonetisizeResource())
+api.add_route('/graphemes', GraphemesResource())
+api.add_route('/phonemes', PhonemesResource())
 api.add_route('/', UIResource())
 
 
 def parse_args():
     arg_parser = argparse.ArgumentParser(description='Parses args for g2p server')
     arg_parser.add_argument('--config', required=True, help='Path to json with models config')
+    arg_parser.add_argument('--port', default=80, type=int)
     args = arg_parser.parse_args()
     if not os.path.isfile(args.config):
         raise RuntimeError('**Error! Failed to open %s' % args.config)
@@ -201,4 +243,4 @@ if __name__ == '__main__':
         g2p[lang] = PyG2P(*py_g2p_args)
 
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-    simple_server.make_server('0.0.0.0', 80, api).serve_forever()
+    simple_server.make_server('0.0.0.0', args.port, api).serve_forever()

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cmath>
 #include <map>
+#include <algorithm>
 #include <unordered_map>
 
 #include "tensorflow/core/graph/graph_def_builder.h"
@@ -63,6 +64,8 @@ public:
 	Impl(string nn_path, string nn_meta, string fst_path, string dict_path);
 	~Impl();
 	vector<vector<string> > Phonetisize(vector<string> words);
+	vector<string> GetGraphemes();
+	vector<string> GetPhonemes();
 private:
 	tensorflow::Session* _session = NULL;
 	tensorflow::GraphDef _graph_def;
@@ -87,6 +90,16 @@ G2P::G2P(string nn_path, string nn_meta, string fst_path, string dict_path)
 
 G2P::~G2P() {
 	delete pimpl;
+}
+
+vector<string>
+G2P::GetGraphemes() {
+	return pimpl->GetGraphemes();
+}
+
+vector<string>
+G2P::GetPhonemes() {
+	return pimpl->GetPhonemes();
 }
 
 vector<vector<string> >
@@ -153,6 +166,65 @@ G2P::Impl::~Impl()
 		delete _session;
 	}
 }
+
+vector<string>
+G2P::Impl::GetGraphemes() {
+	vector<string> graphemes;
+	if (_session) {
+		for (map<string, int>::iterator it = _g2i.begin(); it != _g2i.end(); it++) {
+			graphemes.push_back(it->first);
+		}
+	} else if (_fst_decoder) {
+		for (int i = 0; i < (int)_fst_decoder->isyms_->NumSymbols(); i++) {
+			auto key = _fst_decoder->isyms_->GetNthKey(i);
+			string sym = _fst_decoder->FindIsym(key);
+			if (sym.find("|") != string::npos) {
+				continue;
+			}
+			if (sym.find("_") != string::npos) {
+				continue;
+			}
+			if(!sym.compare("<eps>")) {
+				continue;
+			}
+			if (sym.length() > 0) {
+				graphemes.push_back(sym);
+			}
+		}
+	}
+	sort(graphemes.begin(), graphemes.end());
+	return graphemes;
+}
+
+vector<string>
+G2P::Impl::GetPhonemes() {
+	vector<string> phonemes;
+	if (_session) {
+		for (map<int, string>::iterator it = _i2p.begin(); it != _i2p.end(); it++) {
+			phonemes.push_back(it->second);
+		}
+	} else if (_fst_decoder) {
+		for (int i = 0; i < (int)_fst_decoder->osyms_->NumSymbols(); i++) {
+			auto key = _fst_decoder->osyms_->GetNthKey(i);
+			string sym = _fst_decoder->FindOsym(key);
+			if (sym.find("|") != string::npos) {
+				continue;
+			}
+			if (sym.find("_") != string::npos) {
+				continue;
+			}
+			if(!sym.compare("<eps>")) {
+				continue;
+			}
+			if (sym.length() > 0) {
+				phonemes.push_back(sym);
+			}
+		}
+	}
+	sort(phonemes.begin(), phonemes.end());
+	return phonemes;
+}
+
 
 void
 G2P::Impl::GetShortestPath(VectorFst<StdArc> *res_fst, vector<string> *pron) {
