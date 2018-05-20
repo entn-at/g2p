@@ -43,16 +43,16 @@ text-align: center;
 <label for="other">ru</label>
 </p>
 
-<p>
-<button id="button_graphemes" name="graphemes" style="margin-top:10px">Graphemes</button>
-<button id="button_phonemes" name="phonemes" style="margin-top:10px">Phonemes</button>
+<p style="margin-top:10px">
+<button id="button_graphemes" name="graphemes">Graphemes</button>
+<button id="button_phonemes" name="phonemes">Phonemes</button>
 </p>
 
-<p>Submit word list:</p>
+<p style="margin-left:60px">Submit word list:</p>
 <input type="file" id="word_list" accept="text/*" size="30">
-<p>or</p>
+<p style="margin-left:100px">or</p>
 <input id="text" type="text" size="30" placeholder="Enter word" style="margin-top:5px">
-<p><button id="button" name="phonetisize" style="margin-top:10px">Phonetisize</button></p>
+<p><button id="button" name="phonetisize" style="margin-left:60px" style="margin-top:10px">Phonetisize</button></p>
 <p id="message"></p>
 </div>
 <footer align="center">
@@ -110,7 +110,7 @@ function phonetisize(text, lang) {
       if (!res.ok) throw Error(res.statusText)
       return res.text()
     }).then(function(pron) {
-      q('#message').textContent = q('#text').value.trim() + '  ' + pron
+      q('#message').textContent = q('#text').value.trim() + ' ' + pron
       q('#text').value = ''
       q('#button').disabled = false
     }).catch(function(err) {
