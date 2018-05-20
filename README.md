@@ -65,6 +65,31 @@ approach    | model size |  WER, %       | stressless WER, %
 fst 3-gram  | 1.9mB      | 0.4829        | 0.3812
 small ctc   | 1.1mB      | 0.3608        | 0.3108
 
+## Usage
+
+To train a NN g2p model from scratch:
+
+```bash
+python3 read_utils.py dicts/en_us/amepd train dev test
+python3 nn/train.py --train train --dev dev --model-dir g2p_transformer --model-type transformer [--hparams ...]
+```
+
+Select the best training step and freeze the model to be able to use it from application:
+
+```bash
+python3 nn/freeze.py  --model g2p_transformer/g2p-50000 --freeze-dir frozen --frozen-name amepdnn.model
+```
+
+Frozen model can be used in g2p library with python interface:
+
+```bash
+make
+echo "test" | ./g2p_app frozen/amepdnn.model frozen/meta "" ""
+echo "test" | python3 g2p_app.py --nn frozen/amepdnn.model --nn-meta frozen/meta 
+```
+
+There are scripts for phonetisaurus and tensorflow building, but those are rather pointers, you may need to install additional libs with apt-get.
+
 ## TODO
 Possible improvements:
 
@@ -72,6 +97,9 @@ Possible improvements:
 * More experimentation with model hyper-params, same results should be obtained with smaller and faster NN model.
 * Optimize the trained networks: [documentation](https://www.tensorflow.org/mobile/optimizing)
 * In case of fst+nn, the most time is taken by intersection operation. During lattice composition from NN output, it can be sufficiently pruned, speeding up subsequent intersection.
+* For really long words (perhaps unseen context), NN gets confused and outputs garbage.
+* Refactor network feeding to use tf.data instead of feed_dict.
+* Attach NN meta to the frozen model
 * More languages!
 
 ## Help
